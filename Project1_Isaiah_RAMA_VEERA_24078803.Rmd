@@ -1,0 +1,1474 @@
+---
+title: "CITS4009-2 Project 1 - Exploratory Data Analysis"
+author: "Isaiah RAMA VEERA (24078803)"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    number_sections: no
+    highlight: pygments
+    code_folding: show
+  pdf_document:
+    toc: yes
+---
+
+```{r,warning=FALSE, message=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Essential packages:
+
+```{r}
+#install.packages(c("readr", "stringr", "dplyr", "shiny", "shinydashboard", "DT", "ggplot2", "plotly", "e1071", "RColorBrewer", "rnaturalearth", "sf","ggrepel"))
+```
+
+## Loading all the essential libraries:-
+
+```{r,warning=FALSE, message=FALSE}
+
+library(readr)
+library(stringr)
+library(dplyr)
+library(shiny)
+library(shinydashboard)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(e1071)
+library(RColorBrewer)
+library(rnaturalearth)
+library(sf)
+library(knitr)
+library(ggrepel)
+options(scipen = 999)
+
+```
+
+Shiny App: https://www.youtube.com/watch?v=sU6OYLL6N40
+
+## Importing the data into the dataframe:-
+
+The process starts with reading the YouTube data set from the youtube_UTF_8 local CSV file.As the data set is delimited by a comma we read the data using the "read_csv" command and since it is UTF encoded we employ "locale equals to utf-8 encoding".
+
+```{r,warning=FALSE, message=FALSE}
+
+youtube_data <- read_csv("./Data/youtube_UTF_8.csv", locale = locale(encoding = "UTF-8")) ##(Global YouTube Statistics 2023, n.d.)
+
+```
+
+
+## Checking the last 5 rows of the dataframe:-
+
+```{r,warning=FALSE}
+
+tail(youtube_data,5)
+
+```
+
+***Initial observations:*** From the initial observations of the above data there is ample evidence that the You-tuber & Title columns appear to have some extra text characters which are incongruous. Also, the category column has “Nan” values which require to be treated.
+
+## Usage of the "str" command in order to Check the column names and their datatypes to achieve a brief overview of the data
+
+```{r,warning=FALSE}
+
+str(youtube_data)
+
+```
+
+***Data observation:*** We are able to observe the datatypes of the above columns and it is evident that they are mostly col_double and col_character.
+
+## Basic Data Insights:-
+
+As inferred from the Data, the total number of rows and columns have been displayed.
+
+```{r,warning=FALSE}
+
+num_rows <- nrow(youtube_data)
+
+cat("No of Rows in dataset :", num_rows,"\n")
+
+num_cols <- ncol(youtube_data)
+
+cat("No of Columns in dataset :", num_cols,"\n") #(OpenAI, 2023)
+
+```
+
+## Application of the command "is.numeric" to the columns in order to find the total count of the numeric column:-
+
+```{r,warning=FALSE}
+
+num_numeric_cols <- sum(sapply(youtube_data, is.numeric))
+
+cat("No of Numeric Columns:", num_numeric_cols,"\n") #(OpenAI, 2023)
+
+```
+
+## Application of the command "is.character" & "factor" to achieve the total no of columns through categorical data
+
+
+```{r,warning=FALSE}
+
+num_categorical_cols <- sum(sapply(youtube_data, function(x) is.character(x) | is.factor(x)))
+
+cat("No of Categorical Columns:", num_categorical_cols,"\n") #(OpenAI, 2023)
+
+```
+
+## Application of the "summary" command on the YouTube data to achieve the statistical summary for an initial overview and printing it:-
+
+```{r,warning=FALSE}
+
+print(summary(youtube_data)) #(OpenAI, 2023)
+
+```
+
+***Data observation:*** From the above data, basic insights like (i) The number of rows & columns and (ii) How many of them are numerical and categorical columns and (iii) their distribution of data is observed. This enables a brief understanding of the minimum, maximum, mean, median, 1st Quartile, 3rd Quartile and NA values per column.
+
+## Finding the unique and specific data points within the "country", "abbreviation",  "channel type", "month of creation" and "category" columns to achieve relevant Data transformations:-
+
+```{r,warning=FALSE}
+
+# Choosing specific columns
+
+cols_of_interest <- c("Country", "Abbreviation", "channel_type", "created_month","category")
+
+# Writing a for loop so we can see the unique values from the desired categorical columns
+
+for (col_name in cols_of_interest)
+{
+  cat("\n", col_name, ":\n")
+  
+  unique_vals <- unique(youtube_data[[col_name]])
+  
+  print(unique_vals)
+  
+  cat("Total no of the unique values:", length(unique_vals), "\n") #(OpenAI, 2023)
+}  
+```
+
+***Data observation:*** There are several “nan” values which are stored as a string in each categorical column which require to be cleaned. Viewing the unique values helps us understand if there are any characters within a column which have extra characters which are indiscernible. Proceeding with delving further into the "Title" and "Youtuber" column as it appears that they contain nearly identical data.
+
+## Selecting and Studying the "Title" & "Youtuber" column separately to check if they have same information as they appear nearly identical from intial observation from the tail command:-
+
+```{r,warning=FALSE}
+
+cols_of_interest <- c("Title", "Youtuber")
+
+# Loop through the columns and display the first 10 unique values using the head inside the print function:
+
+for (col_name in cols_of_interest)
+  {
+  cat("\n", col_name, ":\n")
+  
+  unique_vals <- unique(youtube_data[[col_name]])
+  
+  print((unique_vals))
+  
+  cat("Total no of unique values:", length(unique_vals), "\n")
+} #(OpenAI, 2023)
+
+```
+
+***Data Observation:*** It is observed that there are characters like “ýýý Kids Diana Show” which implies that the data requires to be cleaned first and to then compare and decide if we wish to retain one or both of the columns as they convey the same information.
+
+```{r}
+# Combining all columns of interest into a single vector
+cols_of_interest <- c("Country", "Abbreviation", "channel_type", "created_month", "category", "Title", "Youtuber")
+
+# Loop through the combined columns and display unique values, total number of unique values, and number of missing values:
+for (col_name in cols_of_interest) {
+  cat("\n", col_name, ":\n")
+  
+  # Get unique values in the column
+  unique_vals <- unique(youtube_data[[col_name]])
+  
+  # Print unique values
+  print(head(unique_vals))
+  
+  # Print total number of unique values
+  cat("Total number of unique values:", length(unique_vals), "\n")
+  
+  # Check and print the number of missing values in the column
+  cat("Number of missing values:", sum(is.na(youtube_data[[col_name]])), "\n")
+}
+
+```
+
+
+## Data Engineering and Transformation:-
+
+Proceeding to cleaning the "YouTuber" & "Title" column by replacing every non-alphanumeric character with an empty string, preserving letters, numbers, spaces, dashes, underscores and removing everything else. Simultaneously in addition - null values and duplicate rows shall be handled.
+
+```{r,warning=FALSE}
+
+## Filling the youtuber column with empty string after cleaning:
+
+youtube_data$Youtuber <- str_replace_all(youtube_data$Youtuber, "[^a-zA-Z0-9\\s-_]", "")
+
+## Filling the title column with empty string after cleaning:
+
+youtube_data$Title<-str_replace_all(youtube_data$Title,"[^a-zA-Z0-9\\s-_]", "")
+
+# Handling the Null values in the title and you tuber column:
+
+youtube_data$Youtuber[trimws(youtube_data$Youtuber) == ""] <- NA
+
+youtube_data$Title[trimws(youtube_data$Title) == ""] <- NA
+
+# Replacing the 'video views'with video_views
+
+youtube_data <- youtube_data %>%rename(video_views = `video views`)  #(OpenAI, 2023)
+```
+
+```{r,warning=FALSE}
+
+# Replacing the "nan" values with NA for other remaining columns and writing a for loop for it:
+
+cols_to_clean <- c("Country", "Abbreviation", "channel_type", "created_month", "category")
+
+for (col_name in cols_to_clean)
+{
+    youtube_data[[col_name]][youtube_data[[col_name]] == "nan"] <- NA
+}  #(OpenAI, 2023)
+
+```
+
+## Creating a Function which detects the duplicated rows in the dataset:
+
+```{r,warning=FALSE}
+
+detect_duplicate_columns <- function(data)
+{
+  duplicates <- which(duplicated(as.list(data)))
+  
+  unique_duplicates <- unique(duplicates)
+  
+  return(unique_duplicates)            #(OpenAI, 2023)
+}
+
+```
+
+
+```{r,warning=FALSE}
+
+# Storing the duplicated rows in the variable:
+
+dup_cols <- detect_duplicate_columns(youtube_data)
+
+# Finding the count of duplicate columns
+
+num_duplicate_cols <- length(dup_cols)
+
+# Adding the sum of  all duplicate rows in the data set:
+
+num_duplicate_rows <- sum(duplicated(youtube_data))
+
+# Printing the count of duplicated rows and columns:
+
+cat("Total no of duplicate rows:", num_duplicate_rows,"\n")
+cat("Total no of duplicate columns:", num_duplicate_cols,"\n")  #(OpenAI, 2023)
+```
+
+***Data Observation:*** It is now amply evident that there are no duplicate data points in the data set and all “nan” values have been successfully replaced with the NA values. Thus, proceeding to observe the overall missing data.
+
+Now let's see overall missing data? 
+
+## Missing Data Insights:-
+
+```{r,warning=FALSE}
+
+# Counting the total number of missing data points in the entire data set:
+
+missing_data <- sum(is.na(youtube_data))
+
+cat("Total No of missing data points in the dataframe:", missing_data, "\n")
+
+# Finding the Overall Percentage of Present and Missing Data:
+
+total_cells <- prod(dim(youtube_data))
+total_missing <- sum(is.na(youtube_data))
+
+cat("Total Percentage of the Missing Data:", 100 * (total_missing / total_cells), "%\n")
+
+cat("Total Percentage of the Present Data:", 100 * (1 - (total_missing / total_cells)), "%\n")
+
+# Identifying which columns have missing values and how many are missing in each of them
+
+missing_per_column <- sapply(youtube_data, function(x) sum(is.na(x)))
+
+columns_with_missing <- missing_per_column[missing_per_column > 0]
+
+# Displaying the results in a well-formatted manner which is easy to understand:
+
+cat("\nColumns with Missing Values:\n")
+
+print(columns_with_missing)
+cat("\n")  #(OpenAI, 2023)
+```
+
+```{r}
+#Creating a data frame for visualization
+
+missing_column_df<-data.frame(column=names(columns_with_missing),count=as.numeric(columns_with_missing))
+
+#Plot:
+
+ggplot(missing_column_df,aes(x=reorder(column,count),y=count))+geom_bar(stat="identity")+geom_text(aes(label=count),hjust=0.1)+coord_flip()+labs(title="Count of Missing Values per column",x="Column",y="No of missing values")+theme_minimal()
+
+#(OpenAI, 2023)
+
+```
+
+***Data observation:*** It is observed that the columns like "Gross tertiary education enrollment(%)", "Unemployment rate", "Population", "Urban_population", "Latitude", "Longitude" all have 123 missing values. The highest missing values per column of 337 missing values are seen in the "subscribers_for_last_30_days" column.
+
+## Plotting a Bar Chart to display the Overall percentage of Missing Data vs Present Data
+
+```{r,warning=FALSE}
+
+missing_data_df <- data.frame(category = c("Missing", "Present"),value =c(total_missing,total_cells-total_missing))
+
+missing_data_df$percentage<-((missing_data_df$value)/sum(missing_data_df$value))*100
+
+#Plotting the data using ggplot2
+
+ggplot(missing_data_df, aes(x=category, y=value, fill=category))+geom_bar(stat="identity")+geom_text(aes(label=paste0(round(percentage,2),"%")),vjust=-0.5)+labs(title = "Overall Percentage of Missing vs Present Data")
+
+ #(OpenAI, 2023)
+
+
+```
+
+***Conclusion :***  From the Bar Chart is appears that a mere 5.92% data is missing and 94.08% data is already available. This is a good sign and it can therefore be concluded that missing data is not a big issue.
+
+## Application of Transformation to deal with the missing data issue:-
+- Numeric columns: NA values are replaced with the median of the column
+- Filling the categorical columns with “Unknown” is an appropriate option especially considering a column like "created month". This has 13 unique           values including “nan” or “Unknown” and in this case it is impossible to have any more values
+
+```{r,warning=FALSE}
+
+# Writing a basic function which fills with median in numerical columns and "Unknown" in the categorical columns
+
+impute_data <- function(data_col)
+{
+  if(is.numeric(data_col))
+  {
+    return(ifelse(is.na(data_col),median(data_col, na.rm = TRUE), data_col))
+    
+  } else if(is.factor(data_col) || is.character(data_col))
+    
+  {
+    return(ifelse(is.na(data_col), "Unknown", data_col))
+  
+    }
+  else
+  {
+     return(data_col)
+  
+    }
+  
+} #(OpenAI, 2023)
+```
+
+```{r,warning=FALSE}
+
+# Applying the impute function to each column of youtube_data
+
+youtube_data[] <- lapply(youtube_data, impute_data)
+
+# Count the total number of missing data points post-imputation to ensure no missing values remain
+
+missing_data <- sum(is.na(youtube_data))
+
+cat("Number of missing data points post-imputation:", missing_data, "\n")
+
+# Checking Overall Percentage of Present and Missing Data post-imputation
+
+total_cells <- prod(dim(youtube_data))
+total_missing <- sum(is.na(youtube_data))
+
+cat("Percentage of Missing Data post-imputation:", 100 * (total_missing / total_cells), "%\n")
+
+cat("Percentage of Present Data post-imputation:", 100 * (1 - (total_missing / total_cells)), "%\n")
+
+# Identify which columns still have missing values post-imputation
+
+missing_per_column <- sapply(youtube_data, function(x) sum(is.na(x)))
+
+columns_with_missing <- missing_per_column[missing_per_column > 0]
+
+cat("\nColumns with Missing Values:\n")
+
+print(columns_with_missing) #(OpenAI, 2023)
+
+```
+
+After performing the above transformation successfully, the next step is to check and ensure that all data points match in the "Youtuber" & "Title" Column. This will assist us to conclude whether to retain or drop one or other columns.
+
+## Identifying the points where the "Youtuber" & "title" column do not match and checking how rows which don’t match exactly appear within the data
+```{r,warning=FALSE}
+
+non_matching_rows <- which(youtube_data$Youtuber != youtube_data$Title)
+
+if (length(non_matching_rows) == 0)
+  {
+    cat("The Youtuber and Title columns are completely identical for all rows.\n")
+}else
+  {
+    cat("The Youtuber and Title columns do not match for", length(non_matching_rows), "rows.\n")
+  
+# Displaying the actual values in the first few non-matching rows:
+  
+cat("\nDisplaying a few non-matching values for Youtuber and Title:\n")
+
+# Writing a for loop for the purpose of showing: 
+
+for (index in head(non_matching_rows, 3))
+{ 
+  # Display only the first 3 non-matching rows
+  
+    cat(sprintf("Row %d: Youtuber = '%s', Title = '%s'\n", index, youtube_data$Youtuber[index], youtube_data$Title[index]))
+}
+    if (length(non_matching_rows) > 3) {
+        cat("...and more\n")
+    }
+} #(OpenAI, 2023)
+```
+## Plotting a Bar chart to denote the count of matching vs non-matching rows:-
+
+```{r,warning=FALSE}
+
+total_rows <- nrow(youtube_data)
+
+matching_count <- total_rows - length(non_matching_rows)
+
+data_for_plot <- data.frame(
+    Category = c("Matching", "Non-matching"),
+    Count = c(matching_count, length(non_matching_rows)))
+
+#Taking the help of ggplot:
+ggplot(data_for_plot, aes(x = Category, y = Count, fill = Category)) +geom_bar(stat="identity")+geom_text(aes(label=Count),vjust=-0.5)+labs(title = "Count of Match vs No Match", fill = "Category", y="Count", x="") +theme_minimal() +scale_fill_manual(values = c("Matching" = "green", "Non-matching" = "red"))
+
+ #(OpenAI, 2023)
+
+```
+
+***Data observation:*** From the above Bar-chart it is evident that they are not the same columns and they are different and they do not convey the same information. It is observed that all the "You Tuber channel names" and the "title" do not match. Thus retaining both the columns is essential.
+
+## Bivariate Data Analysis
+
+### Now let find which youtuber category dominates the youtube?
+
+To determine which you tuber category dominates you tube via Bar Chart Analysis such that the numerous categories are plotted along the X-axis and the number of You tubers in units of 50 are plotted along the Y-axis to generate a graphical representation of the data. 
+
+```{r,warning=FALSE}
+
+# Bar chart would be the most appropriate one for this Plot
+
+ggplot(youtube_data,aes(x=category))+geom_bar(fill="steelblue")+ labs(title="Top Youtuber Categories",x="Category",y="No of Youtubers")+ theme(axis.text.x=element_text(angle=90,vjust=1))
+
+ #(OpenAI, 2023)
+
+```
+
+
+***Data observation:*** From the above Bar-chart, the following inferences can be drawn:- 
+
+The "Entertainment" category of Youtubers dominates the YouTube market followed by the categories of "Music", "People and Blogs".Contrarily, the categories of "Autos & Vehicles", "Movies", "Nonprofits & Activism", "Pets & Animals", "Trailers", "Travel & Events" are the least competitive categories with the least number of youtubers.Employing the bar chart as a tool of comparative data analysis in this context is a more intelligible choice because it directly showcases which category is the most frequent one.  
+
+## View vs Subscribers - Is there a correlation between the number of subscribers and video view ?
+
+Determining whether there is a correlation between the number of subscribers and number of video views by using a graph with the number of subscribers have been denoted along the x-axis and the number of video views has been depicted on the y-axis. 
+
+```{r,warning=FALSE}
+
+ggplot(youtube_data, aes(x=subscribers, y=video_views)) + geom_point() + labs(title="Subscribers vs Video Views", x="Subscribers", y="Video Views") +  geom_smooth(method=lm)
+ 
+#(OpenAI, 2023)
+
+```
+
+
+***Data observation:*** The trend represented in the above graphical plotting is that there is a strong correlation between the number of Subscribers and the number of Video Views i.e 0.75 and they are directly proportional to each other as is evident from the linear graph generated. It is also observed that an individual you tuber has more number of subscribers.
+
+## Country-wise Analysis:- Which countries produce the most number of Youtubers?
+
+### Bar chart of Countries against the number of Youtubers
+
+The Bar-chart as a tool for data analysis is optimal in this case as it is useful to plot numerous countries with their respective you tuber numbers and is a simple method to determine quick inferences from the plotting.
+
+```{r,warning=FALSE}
+
+ggplot(youtube_data, aes(x=Country)) + 
+  geom_bar(fill="coral") + 
+  labs(title="Countries with Most Top Youtubers", x="Country", y="Number of Youtubers") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ 
+#(OpenAI, 2023)
+
+```
+
+***Data Observation:*** As can be observed from the above Bar-chart depiction, the country with the maximum number of YouTube subscribers is the United States followed by India in second place and the country with the least number of you tube subscribers is Samoa.
+
+## Channel Type Analysis: Which channel types have the most number of views?
+
+### Boxplot of number of video views versus the channel type:-
+```{r}
+ggplot(youtube_data, aes(x=channel_type, y=video_views)) + 
+  geom_boxplot(fill="lightgreen") + 
+  geom_jitter(width=0.3, size=1.2, color="blue", alpha=0.5) +  # Adjusted jitter width and point size
+  labs(title="Distribution of Video Views by Channel Type", x="Channel Type", y="Video Views") +
+  coord_cartesian(ylim=c(min(youtube_data$video_views), max(youtube_data$video_views))) +  # Adjust y-axis limits
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Rotate x-axis labels and increase font size
+        axis.text.y = element_text(size = 10),                          # Increase y-axis font size
+        axis.title.x = element_text(size = 10),                         # Increase x-axis title font size
+        axis.title.y = element_text(size = 10))                         # Increase y-axis title font size
+ #(OpenAI, 2023)
+```
+
+***Data observation:*** The above boxplot showcases the distribution of the number of views for various channel types. The Channel category which has the most number of views is Entertainment & Music and the non profit channel category has the least number of views. The Box plot as a tool of data analysis in this case is most coherent because the distribution pattern is easy to determine and even the outliers per category are easy and clear to observe and spot. 
+
+## Earnings Analysis: What is the range of earnings (monthly and yearly) among the top Youtubers?
+
+### Histogram of monthly and yearly earnings:-
+
+```{r,warning=FALSE}
+
+ggplot(youtube_data) + 
+  geom_histogram(aes(x=lowest_monthly_earnings), fill="skyblue", alpha=0.7, bins=30) +
+  geom_histogram(aes(x=highest_monthly_earnings), fill="pink", alpha=0.7, bins=30) + 
+  labs(title="Distribution of Monthly Earnings", x="Earnings", y="Number of Youtubers")  #(OpenAI, 2023)
+
+```
+
+
+***Data observation:*** The above Histogram distinctly depicts the distribution of monthly and yearly earnings of number of youtubers. The key takeaways from the histogram are that the lowest monthly earnings range from 0 to 850900 and the highest monthly earnings are ranging from 0 to 13600000. Whereas the lowest yearly earnings from 0 to 10200000 and the highest yearly earnings range from 0 to 163400000.
+
+## Correlation between Gross tertiary education enrollment and number of Youtube Subscribers:-
+
+### Determining whether there is a correlation between the education enrollment in a country and the number of subscribers a Youtuber has from a country by use of a Linear Model Graph 
+```{r,warning=FALSE}
+library(ggrepel)
+
+# Aggregate data by Country and Gross tertiary education enrollment
+aggregated_data <- youtube_data %>%group_by(Country, `Gross tertiary education enrollment (%)`) %>%
+  summarise(total_subscribers = sum(subscribers, na.rm = TRUE), .groups = "drop")
+
+# Plot:
+ggplot(aggregated_data, aes(x=`Gross tertiary education enrollment (%)`, y=total_subscribers, label=Country)) + 
+  geom_point(aes(color=Country), size=3) + 
+  geom_text_repel(aes(label=Country), show.legend = FALSE) +  # This will add country names as labels to the points
+  geom_smooth(method="lm", se=FALSE, color="red", aes(group=1)) +  # This adds the regression line
+  labs(title="Gross Tertiary Education Enrollment vs Total Subscribers by Country", 
+       x="Gross Tertiary Education Enrollment (%)", 
+       y="Total Subscribers") +
+  theme_minimal() +
+  theme(legend.position="none")  # This will remove the legend #(OpenAI, 2023)
+
+
+```
+
+
+***Data observation:*** The above linear model graph gives some key insights into the interconnection between the country-wise Gross Tertiary Education Enrollment percentage against the total number of you tube subscribers in that specific country. It is observed that Afghanistan has least number of you tube subscribers it also has least gross tertiary education enrollment. Whereas Australia too has least number of subscribers but has most gross tertiary education enrollment. And it is also seen that the United States has the most number of total subscribers but not the most gross tertiary education enrollment. The correlation between gross tertiary education enrollment and total subscribers is 0.11 which is means there is no correlation between the two.
+
+## Effect of Urban Population on Video Views: How does the quantum of urban population of a country influence the number of video views?
+
+### Scatter plot of Urban Population vs Video Views
+```{r,warning=FALSE}
+
+ggplot(youtube_data, aes(x=Urban_population, y=video_views)) + 
+	  geom_point() + 
+	  labs(title="Urban Population vs Video Views",x="Urban_Population", y="Video Views")  #(OpenAI, 2023)
+
+```
+
+***Data observations:*** From the above scatterplot of quantum of urban population against the number of video views - a weak correlation between video views and Urban population is clearly observed. The correlation coefficient is 0.07 which is very low. 
+
+## Growth Analysis: Which Youtubers have gained the most subscribers in the last 30 days?
+
+### Bar chart showcasing the top 10 Youtube Channels and their number of subscribers gained in the last 30 days:
+```{r,warning=FALSE}
+top_subscribers_30days <- youtube_data %>%arrange(desc(subscribers_for_last_30_days)) %>%head(10)
+
+ggplot(top_subscribers_30days, aes(x=reorder(Youtuber, -subscribers_for_last_30_days), y=subscribers_for_last_30_days)) +
+  geom_bar(stat="identity", fill="blue") +
+  labs(title="Top 10 YouTubers by Subscribers Gained in the Last 30 Days",
+       x="Channel Name", 
+       y="Subscribers Gained in Last 30 Days") +
+  coord_flip() +  # Makes the bars horizontal  #(OpenAI, 2023)
+  theme_minimal()
+```
+
+
+***Data observation:*** The above Bar chart is useful to analyse the subscribers gained by the top 10 you tube channels in the last 30 days. It can be observed that the YouTube channel Mr Beast has gained most number of subscribers in the last 30 days whereas the you tube channel "T-Series" has gained the least number of subscribers in the same time period. The approximate number of subscribers gained by the remaining 8 of the top 10 channels is also seen. 
+
+## Youtuber Lifespan Analysis: How long have the top Youtubers been active?
+
+### Distribution of the lifespan of a youtuber depicted in a histogram:-
+```{r,warning=FALSE}
+youtube_data$lifespan <- as.numeric(format(Sys.Date(), "%Y")) - youtube_data$created_year
+	ggplot(youtube_data, aes(x=lifespan)) + 
+	  geom_histogram(fill="orange", bins=30) + 
+	  labs(title="Distribution of Youtuber Lifespan", x="Years Active", y="Number of Youtubers")  #(OpenAI, 2023)
+```
+
+***Data observation:*** The above histogram is useful to denote the average life span of a you tuber seems to be less than 20 years. Only one outlier exists here. The overall range seems to be 1 to 50 years approximately.
+
+## Analysis of Views per Upload : How efficient are Youtubers in terms of views per upload?
+
+### Scatter plot to determine the efficiency of the number of uploads by a youtuber vs Views per Upload
+
+```{r,warning=FALSE}
+
+youtube_data$views_per_upload <- youtube_data$video_views / youtube_data$uploads
+
+ggplot(youtube_data, aes(x=uploads, y=views_per_upload)) +geom_point() +labs(title="Efficiency: Views per Upload", x="Number of Uploads", y="Views per Upload") +geom_smooth(method=lm)  #(OpenAI, 2023)
+
+```
+
+```{r}
+# Filter out non-finite values from views_per_upload
+filtered_views_per_upload <- youtube_data$views_per_upload[is.finite(youtube_data$views_per_upload)]
+
+# Calculate the range for views per upload
+min_views_per_upload <- min(filtered_views_per_upload, na.rm = TRUE)
+max_views_per_upload <- max(filtered_views_per_upload, na.rm = TRUE)
+
+# Calculate the median and mean for views per upload
+median_views_per_upload <- median(filtered_views_per_upload, na.rm = TRUE)
+mean_views_per_upload <- mean(filtered_views_per_upload, na.rm = TRUE)
+
+# Print the range, median, and mean of views per upload
+cat("The range of views per upload is from", min_views_per_upload, "to", max_views_per_upload, "\n")
+cat("The median of views per upload is", median_views_per_upload, "\n")
+cat("The average of views per upload is", mean_views_per_upload, "\n")#(OpenAI, 2023)
+```
+
+***Data observation:*** The median of views per upload is 7651218  and the range is from 0 to 30686342319.
+
+## Correlation Between Earnings and Views: Do more views guarantee higher earnings?
+
+### Scatter plots and correlation coefficients
+```{r,warning=FALSE}
+# Using the provided column names:
+ggplot(youtube_data, aes(x=video_views_for_the_last_30_days, y=highest_yearly_earnings)) + 
+  geom_point(aes(color=category)) + 
+  labs(title="Yearly Earnings vs Video Views", x="Video Views for the Last 30 Days", y="Yearly Earnings") +
+  geom_smooth(method=lm, se=FALSE, color="blue")  #(OpenAI, 2023)
+```
+
+```{r,warning=FALSE}
+correlation <- cor(youtube_data$video_views_for_the_last_30_days, youtube_data$highest_yearly_earnings, use="complete.obs")
+print(correlation)
+```
+
+```{r}
+# Group by category and calculate the correlation coefficient
+cor_by_category <- youtube_data %>%
+  group_by(category) %>%
+  summarise(cor_coefficient = cor(video_views_for_the_last_30_days, highest_yearly_earnings, use = "complete.obs"))
+
+# Print the correlation coefficients by category
+print(cor_by_category)#(OpenAI, 2023)
+```
+
+***Data Observation:*** The above scatter plot is useful to determine certain correlations between the number of you tube video views and yearly earnings of some categories of you tubers. It can be observed that the category Autos & Vehicles,Comedy,Education,Entertainment,Film and animation gaming generated the most yearly earnings but Music did not generate higher number of earnings but has a lot of views which means views do not guarantee earnings.
+
+## Geographical Spread vs Unemployment Rate: Is there a pattern where Youtubers emerge more from countries with higher unemployment rates?
+
+### Use of Bubble Plot showing country-wise mean unemployment and the corresponding number of youtubers from those countries:-
+```{r,warning=FALSE}
+	country_data <- youtube_data %>%
+  group_by(Country) %>%
+	  dplyr::summarize(mean_unemployment = mean(`Unemployment rate`, na.rm = TRUE), total_youtubers = n())
+	ggplot(country_data, aes(x=mean_unemployment, y=total_youtubers, size=total_youtubers)) + 
+  geom_point(aes(color=mean_unemployment)) + 
+	  labs(title="Youtubers by Country Unemployment Rate", x="Unemployment Rate (%)", y="Number of Top Youtubers")#(OpenAI, 2023)
+```
+
+```{r}
+# Calculate the correlation coefficient between mean_unemployment and total_youtubers
+cor_coefficient <- cor(country_data$mean_unemployment, country_data$total_youtubers, use = "complete.obs")
+
+# Print the correlation coefficient
+cat("The correlation coefficient between mean unemployment rate and the total number of Youtubers is:", cor_coefficient, "\n")
+
+# Interpret the correlation
+if (abs(cor_coefficient) > 0.7) {
+  cat("There is a strong correlation between the mean unemployment rate and the total number of Youtubers. Countries with higher unemployment rates tend to have more Youtubers.\n")
+} else if (abs(cor_coefficient) > 0.5) {
+  cat("There is a moderate correlation between the mean unemployment rate and the total number of Youtubers. Countries with higher unemployment rates somewhat tend to have more Youtubers.\n")
+} else {
+  cat("There is a weak or no correlation between the mean unemployment rate and the total number of Youtubers. Countries with higher unemployment rates do not necessarily have more Youtubers.\n")
+}#(OpenAI, 2023)
+
+```
+
+***Data observation:*** The above bubble plot depicts the unemployment rate of the youtubers.
+
+## Educational Enrollment and Youtuber Dominance: Do countries with higher tertiary education enrollment produce more influential Youtubers (using the number of subscribers as a metric)?
+
+### Bubble plot with country-wise tertiary education enrollment and total number of subscribers from that country:-
+```{r,warning=FALSE}
+	country_education <- youtube_data %>%
+	  group_by(Country) %>%
+	  dplyr::summarize(mean_education = mean(`Gross tertiary education enrollment (%)`, na.rm = TRUE), 
+	            total_subs = sum(subscribers, na.rm = TRUE))
+	ggplot(country_education, aes(x=mean_education, y=total_subs, size=total_subs)) + 
+	  geom_point(aes(color=mean_education)) + 
+	  labs(title="Subscriber Base vs Education Enrollment", x="Education Enrollment (%)", y="Total Subscribers")  #(OpenAI, 2023)
+```
+
+```{r}
+# Calculate the correlation coefficient between mean_education and total_subs
+cor_coefficient <- cor(country_education$mean_education, country_education$total_subs, use = "complete.obs")
+
+# Print the correlation coefficient
+cat("The correlation coefficient between mean tertiary education enrollment rate and the total number of subscribers is:", cor_coefficient, "\n")
+
+# Interpret the correlation
+if (abs(cor_coefficient) > 0.7) {
+  cat("There is a strong correlation between the mean tertiary education enrollment rate and the total number of subscribers. Countries with higher education enrollment rates tend to produce more influential Youtubers.\n")
+} else if (abs(cor_coefficient) > 0.5) {
+  cat("There is a moderate correlation between the mean tertiary education enrollment rate and the total number of subscribers. Countries with higher education enrollment rates somewhat tend to produce more influential Youtubers.\n")
+} else {
+  cat("There is a weak or no correlation between the mean tertiary education enrollment rate and the total number of subscribers. Countries with higher education enrollment rates do not necessarily produce more influential Youtubers.\n")
+}#(OpenAI, 2023)
+
+```
+
+## Monthly Earnings Volatility: How volatile are the monthly earnings of Youtubers?
+
+### New column calculating the difference between highest and lowest monthly earnings to infer earnings volatility, followed by a histogram to observe the distribution of the monthly earnings.
+```{r,warning=FALSE}
+youtube_data$earnings_volatility <- youtube_data$highest_monthly_earnings - youtube_data$lowest_monthly_earnings
+	ggplot(youtube_data, aes(x=earnings_volatility)) + 
+	  geom_histogram(fill="purple", bins=30) + 
+	  labs(title="Distribution of Monthly Earnings Volatility", x="Earnings Volatility", y="Number of Youtubers") #(OpenAI, 2023)
+
+```
+
+```{r}
+# Calculate earnings volatility
+youtube_data$earnings_volatility <- youtube_data$highest_monthly_earnings - youtube_data$lowest_monthly_earnings
+
+# Calculate summary statistics
+mean_volatility <- mean(youtube_data$earnings_volatility)
+median_volatility <- median(youtube_data$earnings_volatility)
+std_dev_volatility <- sd(youtube_data$earnings_volatility)
+range_volatility <- range(youtube_data$earnings_volatility)
+
+# Print summary statistics
+cat("Mean of Earnings Volatility:", mean_volatility, "\n")
+cat("Median of Earnings Volatility:", median_volatility, "\n")
+cat("Standard Deviation of Earnings Volatility:", std_dev_volatility, "\n")
+cat("Range of Earnings Volatility:", range_volatility[1], "to", range_volatility[2], "\n") #(OpenAI, 2023)
+```
+
+
+***Data observation:*** From the above plotted histogram the monthly earnings volatility of the You tubers and their distribution can be observed. Hence therefor monthly earnings of you tubers is highly volatile.
+
+## Analysis by Creation Date:  Are there certain months or dates when more top Youtubers started their channels? Maybe to coincide with holidays or events?
+
+### Heat map as a tool to depict created_month vs created_date of the top youtube channels:-
+```{r,warning=FALSE}
+month_date_count <- youtube_data %>%
+	  group_by(created_month, created_date) %>%
+	  tally()
+	ggplot(month_date_count, aes(x=created_month, y=created_date, fill=n)) + 
+	  geom_tile() + 
+	  labs(title="Heatmap of Channel Creation Dates", x="Month", y="Date")
+ #(OpenAI, 2023)
+```
+
+***Data observation:*** The above heat map illustrates that many of the top you tubers have created their you tube accounts on common dates and months. The "n" value here highlights the information about the frequency of those common occasions when the you tubers had created their account.
+
+## Urbanization vs Popularity: Do Youtubers from more urbanized countries tend to be more popular?
+
+### Scatter plot of Urban Population vs Total number of Subscribers:-
+
+```{r,warning=FALSE}
+country_urban <- youtube_data %>%
+  group_by(Country) %>%
+  dplyr::summarize(mean_urban_population = mean(Urban_population, na.rm = TRUE), 
+            total_subs = sum(subscribers, na.rm = TRUE))
+ggplot(country_urban, aes(x=mean_urban_population, y=total_subs)) + 
+  geom_point(aes(color=mean_urban_population)) + 
+  labs(title="Subscriber Base vs Urban Population", x="Urban Population (%)", y="Total Subscribers") +
+  geom_smooth(method=lm) #(OpenAI, 2023)
+```
+
+```{r}
+# Calculate the correlation coefficient between mean_urban_population and total_subs
+cor_coefficient <- cor(country_urban$mean_urban_population, country_urban$total_subs, use = "complete.obs")
+
+# Print the correlation coefficient
+cat("The correlation coefficient between mean urban population and the total number of subscribers is:", cor_coefficient, "\n")
+
+# Interpret the correlation
+if (abs(cor_coefficient) > 0.7) {
+  cat("There is a strong correlation between the mean urban population and the total number of subscribers. Youtubers from more urbanized countries tend to be more popular.\n")
+} else if (abs(cor_coefficient) > 0.5) {
+  cat("There is a moderate correlation between the mean urban population and the total number of subscribers. Youtubers from more urbanized countries somewhat tend to be more popular.\n")
+} else {
+  cat("There is a weak or no correlation between the mean urban population and the total number of subscribers. Youtubers from more urbanized countries do not necessarily tend to be more popular.\n")
+}
+
+```
+
+
+***Data observation:*** It can be observed from the above Scatter plot that the subscriber-base and Urban population have a positive correlation. The trend thereby noted is that as the urban population does not generate popular youtubers.
+
+## Spatial Analysis: Where are the top Youtubers located geographically?
+
+### Visualization: Geospatial map plotting Youtubers based on their Latitude and Longitude
+```{r,warning=FALSE}
+# Get the world map
+library(rnaturalearth)
+library(sf)
+world <- ne_countries(scale = "medium", returnclass = "sf")
+ggplot(data = world) +
+  geom_sf() +
+  geom_point(data = youtube_data, aes(x = Longitude, y = Latitude, color = category), alpha = 0.7, size = 3) +
+  labs(title = "Geographical Distribution of Top Youtubers") +
+  theme_minimal() #(OpenAI, 2023)
+```
+
+***Data Observation:*** : The distribution of You Tubers across the globe as per each category can be observed from the above geo-spatial map. 
+
+
+## Subscribers Growth Rate: Which Youtubers have the highest growth rate in subscribers over the past 30 days compared to their total subscribers?
+
+### Bar chart of growth rates of the Top 10 youtubers:
+```{r,warning=FALSE}
+youtube_data$growth_rate <- (youtube_data$subscribers_for_last_30_days / youtube_data$subscribers) * 100
+top_growth_rate <- youtube_data %>%arrange(desc(growth_rate)) %>%head(10)
+ggplot(top_growth_rate, aes(x=Youtuber, y=growth_rate)) + 
+  geom_bar(stat="identity", fill="#008080") + 
+  labs(title="Top Youtubers by Subscribers Growth Rate", x="Youtuber", y="Growth Rate (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #(OpenAI, 2023)
+```
+
+***Data Observation:*** The above plotted Bar-chart depicts that among the top 10 youtubers it is the channel "DaFuqBoom" which has the highest percentage of subscribers growth rate and the lowest growth rate is seen in the youtuber channel "vector".
+
+
+## Channel Type Diversity: How diverse are the content categories among different channel types? 
+
+### Stacked bar chart of channel type vs categories.
+```{r,warning=FALSE}
+ggplot(youtube_data, aes(fill=category, y=..count.., x=channel_type)) + 
+  geom_bar(position="fill") + 
+  labs(title="Category Diversity by Channel Type", x="Channel Type", y="Proportion") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) #(OpenAI, 2023)
+```
+
+***Data observation:*** The above plotted Stacked Bar Chart illustrates the diversity in the categories among the various channel types available on YouTube. Here the channel Types are represented on the X-axis and the proportion of each category within each channel type is shown along the Y-axis. The stacked bar is the most appropriate choice to plot in this case as the objective is to determine the sub-category within a channel type
+
+## Conclusion:
+
+>* The YouTube Dataset has 995 rows and 28 columns of which 21 are numerical and 7 columns are categorical.
+>* All the data in the YouTube data is col_double and col_character data type.
+>* Country, Abbreviation, Channel Type, created month, category, Title & Youtuber columns have nan values.
+>* Title and Youtuber columns do not convey the same information i.e. they are not identical columns.
+>* They are no duplicate rows or columns in the dataset.
+>* Only 5.91% of the data is actually missing and 94.084% of Data is present.
+>* Missing numerical columns are treated with median whereas missing categorical data are replaced with "Unknown" string.
+>* Top youtuber category which dominates YouTube is Entertainment.
+>* Having a greater number of subscribers initially definitely helps to gain more no of video views but later on, increased growth of no of views is more organic.
+>* Country with the greatest number of Youtubers is United States of America followed by India and least was observed in Samoa.
+>* The Channel Category which have the greatest number of views are Entertainment and Music.
+>* The range of lowest monthly earnings is from 0 to 850900 and highest monthly earnings are ranging from 0 to 13600000.
+>* Gross Tertiary Education Enrolment of a country has no impact on Total Subscribers within the Country.
+>* Urban population and Video Views have a 0.07 correlation which means urban population and video views have no relation
+>* The Channel with the greatest number of subscribers gained with last 30 days is Mr Beast.
+>* Average life span of youtuber seems to be less than 20 years. Only one outlier exists here beyond 50 years. Overall range is between 1 to 50 years approximately
+>* More no of Uploads do not mean a greater number of Views. Only few youtubers gain more views by uploading content consistently. The median views per upload is 7651218.
+>* Yearly Earnings and Video views for last 30 days show a correlation of 0.68. Autos & Vehicles, Entertainment, Film & Animation, Gaming category seems to have the highest yearly earnings. But Music did not generate higher number of views which means views do not guarantee earnings.
+>* The unemployment rate and total no of youtubers have a correlation of 0.277 which means youtubers do not come from countries which have more unemployment rate.
+>* The education enrolment and total no of subscribers have a correlation of 0.11 which means education enrolment of a country has no impact on the total number of subscribers within that country.
+>* Monthly earnings of Youtubers is highly Volatile. Range of earnings Volatility is from 0 to 12749100.
+>* There seems to be a coincidence between the youtubers account creation month and date.
+>* Urban population percentage and total number of subscribers have no correlation i.e. 0.42.
+>* Most diversity among youtuber categories is seen in the UK, European and Asia countries.
+>* Highest growth rate in subscribers over the past 30 days compared to their total subscribers is experienced by DaFuqBoom youtuber.
+>* Entertainment category of YouTube is the most diverse channel type.
+
+
+# Shiny App for Data Summary, box plot, Univariate Distribution, Bivariate analysis, Multivariate Analysis: -
+
+```{r}
+# Main UI
+#Data
+data <- youtube_data
+data <- na.omit(data)
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+if(length(numerical_feats) == 0) {
+  stop("No numerical features found.")
+}
+ui <- dashboardPage(
+  dashboardHeader(title = "YouTube Data Analysis"),
+  dashboardSidebar(
+    sidebarMenu(
+      id = "tabs",
+      menuItem("Data Summary", tabName = "data_summary", icon = icon("table")),
+      menuItem("Skewness and Kurtosis", tabName = "skew_kurt", icon = icon("chart-line")),
+      menuItem("Boxplot Analysis", tabName = "boxplot", icon = icon("bar-chart")),
+      menuItem("Bivariate Analysis", tabName = "bi_analysis", icon = icon("list")),
+      menuItem("Multivariate Analysis", tabName = "multi_analysis", icon = icon("list")),
+      conditionalPanel(
+        condition = "input.tabs != 'data_summary'",
+        selectInput("feature", "Choose a Feature:", choices = numerical_feats, selected = numerical_feats[1]),
+        selectInput("analysis_type", "Choose an Analysis:", 
+                    choices = c("Top YouTuber By Category",
+                                "Views vs Subscribers", 
+                                "Education Enrollment vs Subscribers", 
+                                "Urban Population vs Video Views", 
+                                "Views per Upload", 
+                                "Earnings vs Views", 
+                                "Urbanization vs Popularity",
+                                "Countries with Most Top Youtubers",
+                                "Channel Type Diversity", 
+                                "Geographical Spread vs. Unemployment Rate", 
+                                "Educational Enrollment and Youtuber Dominance", 
+                                "Spatial Analysis",
+                                "Heat map of created_month vs created_date"), 
+                    selected = "Top YouTuber By Category")
+      )
+    )
+  ),
+  dashboardBody(
+    tabItems(
+      # Data Summary Tab
+      tabItem(tabName = "data_summary",
+              tabsetPanel(
+                tabPanel("Categorical Summary", DT::dataTableOutput("catSum")),
+                tabPanel("Statistical Summary", DT::dataTableOutput("statSum"))
+              )),
+      # Skewness and Kurtosis Tab
+      tabItem(tabName = "skew_kurt",
+              plotOutput("distPlot"),
+              verbatimTextOutput("hover_info")),
+      # Boxplot Analysis Tab
+      tabItem(tabName = "boxplot",
+              plotlyOutput("boxPlot"),
+              verbatimTextOutput("statsText")),
+      # Bivariate Analysis Tab
+      tabItem(tabName = "bi_analysis",
+              fluidRow(
+                box(title = "Bivariate Analysis", plotlyOutput("bi_plot"), width = 12)
+              )),
+      # Multivariate Analysis Tab
+      tabItem(tabName = "multi_analysis",
+              fluidRow(
+                box(title = "Multivariate Analysis", plotlyOutput("multi_plot"), width = 12)
+              ))
+    )
+  )
+)
+
+# Main Server
+server <- function(input, output, session) {
+
+
+# Custom function to describe categorical variables
+describe_categorical <- function(df)
+  {cat_describe <- data.frame(
+    column_name = character(0),
+    count = integer(0),
+    unique = integer(0),
+    top = character(0),
+    freq = integer(0))
+  for (col_name in colnames(df))
+    {if (is.factor(df[[col_name]]) || is.character(df[[col_name]])) {
+      n <- length(df[[col_name]])
+      unique_values <- unique(df[[col_name]])
+      unique_count <- length(unique_values)
+      value_table <- table(df[[col_name]])
+      top_value <- as.character(names(sort(value_table, decreasing=TRUE)[1]))
+      top_value_count <- as.integer(sort(value_table, decreasing=TRUE)[1])
+      
+      cat_describe <- rbind(cat_describe, data.frame(
+        column_name = col_name,
+        count = n,
+        unique = unique_count,
+        top = top_value,
+        freq = top_value_count
+      ))
+    }
+  }
+  rownames(cat_describe) <- NULL
+  return(cat_describe)
+}
+# Custom function to describe numerical variables
+describe_numerical <- function(df)
+  {num_describe <- data.frame(
+    column_name = character(0),
+    statistic = character(0),
+    value = numeric(0))
+  for (col_name in colnames(df)) {
+    if (is.numeric(df[[col_name]])) {
+      s <- summary(df[[col_name]])
+      stats_data <- data.frame(
+        column_name = rep(col_name, length(s)),
+        statistic = names(s),
+        value = as.numeric(s)
+      )
+      num_describe <- rbind(num_describe, stats_data)
+    }
+  }
+  rownames(num_describe) <- NULL
+  return(num_describe)}
+
+  # Data Summary Logic
+  output$catSum <- DT::renderDataTable({
+    req(data)  # Check Data Availability
+    datatable(describe_categorical(data), options = list(pageLength = 10))
+  })
+  
+  output$statSum <- DT::renderDataTable({
+    req(data)  # Check Data Availability
+    datatable(describe_numerical(data), options = list(pageLength = 10))
+  })
+  
+  # Skewness and Kurtosis Logic
+output$distPlot <- renderPlot({
+  # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+  p <- ggplot() + 
+       annotate("text", x = 0.5, y = 0.5, label = "Please select a feature") +
+       theme_void()
+  # Check for required libraries
+  required_libraries <- c("ggplot2", "e1071")
+  missing_libraries <- required_libraries[!(required_libraries %in% installed.packages()[,"Package"])]
+  if(length(missing_libraries) > 0) {
+    print(paste("Missing libraries: ", paste(missing_libraries, collapse = ", ")))
+    return(NULL)
+  }
+  
+  # Check for data availability
+  if (is.null(data) || nrow(data) == 0) {
+    print("Data is not available.")
+    return(NULL)
+  }
+  
+  # Check if 'feature' input exists and is not NULL
+  if (is.null(input$feature) || input$feature == "") {
+    print("Feature is not selected.")
+    return(NULL)
+  }
+  
+  # Check if the feature exists in the data
+  if (!input$feature %in% names(data)) {
+    print("Feature does not exist in the data.")
+    return(NULL)
+  }
+  
+  # Ensure the feature is numeric
+  if (!is.numeric(data[[input$feature]])) {
+    print("Selected feature is not numeric.")
+    return(NULL)
+  }
+  
+  # Check for NA or NULL values in the data
+  if (all(is.na(data[[input$feature]]))) {
+    print("Feature contains only NA values.")
+    return(NULL)
+  }
+  
+  # Check for zero variance (constant feature)
+  if (var(data[[input$feature]], na.rm = TRUE) == 0) {
+    print("Feature has zero variance, skewness and kurtosis are undefined.")
+    return(NULL)
+  }
+  feat <- sym(input$feature)
+  p <- ggplot(data, aes(x = !!feat)) +
+    geom_histogram(aes(y = ..density..), bins = 30, fill = "skyblue", alpha = 0.7, color = "white") +
+    geom_density(aes(y = ..density..), color = "blue", size = 1.2) +
+    labs(title = paste('Skewness =', round(skewness(data[[input$feature]], na.rm = TRUE), 2), '\n Kurtosis =', round(kurtosis(data[[input$feature]], na.rm = TRUE), 2))) +
+    theme_minimal()
+  
+  return(p)
+})
+
+# Display data on hover
+output$hover_info <- renderText({
+  if (is.null(input$hover)) {
+    return("Hover over the plot to see values.")
+  }
+  
+  if (is.null(input$hover$x)) {
+    return("Invalid hover data.")
+  }
+  
+  paste0("Value: ", round(input$hover$x, 2))
+})
+  
+  # Boxplot Analysis Logic
+output$boxPlot <- renderPlotly({
+  # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+  p <- ggplot() + 
+       annotate("text", x = 0.5, y = 0.5, label = "Please select a feature") +
+       theme_void()
+  # Check for required libraries
+  required_libraries <- c("ggplot2", "plotly")
+  missing_libraries <- required_libraries[!(required_libraries %in% installed.packages()[,"Package"])]
+  if(length(missing_libraries) > 0) {
+    print(paste("Missing libraries: ", paste(missing_libraries, collapse = ", ")))
+    return(NULL)
+  }
+  
+  # Check for data availability
+  if (is.null(data) || nrow(data) == 0) {
+    print("Data is not available.")
+    return(NULL)
+  }
+  
+  # Check if 'feature' input exists and is not NULL
+  if (is.null(input$feature) || input$feature == "") {
+    print("Feature is not selected.")
+    return(NULL)
+  }
+  
+  # Check if the feature exists in the data
+  if (!input$feature %in% names(data)) {
+    print("Feature does not exist in the data.")
+    return(NULL)
+  }
+  
+  # Ensure the feature is numeric
+  if (!is.numeric(data[[input$feature]])) {
+    print("Selected feature is not numeric.")
+    return(NULL)
+  }
+  
+  # Check for NA or NULL values in the data
+  if (all(is.na(data[[input$feature]]))) {
+    print("Feature contains only NA values.")
+    return(NULL)
+  }
+  feat <- sym(input$feature)
+  q1 <- quantile(data[[input$feature]], 0.25, na.rm = TRUE)
+  q3 <- quantile(data[[input$feature]], 0.75, na.rm = TRUE)
+  IQR <- q3 - q1
+  ub <- q3 + (1.5 * IQR)
+  lb <- q1 - (1.5 * IQR)
+  outliers_count <- sum(data[[input$feature]] > ub, na.rm = TRUE) + sum(data[[input$feature]] < lb, na.rm = TRUE)
+
+  p <- ggplot(data, aes(x = factor(0), y = !!feat)) +
+    geom_boxplot() +
+    labs(title = paste('Outliers Count =', outliers_count), y = input$feature, x = "") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank())
+  
+  ggplotly(p)
+})
+
+# Stats Text
+output$statsText <- renderText({
+  
+  # Check for data availability
+  if (is.null(data) || nrow(data) == 0) {
+    return("Data is not available.")
+  }
+  
+  # Check if 'feature' input exists and is not NULL
+  if (is.null(input$feature) || input$feature == "") {
+    return("No feature selected.")
+  }
+  
+  # Check if the feature exists in the data
+  if (!input$feature %in% names(data)) {
+    return("Feature not found in data.")
+  }
+  
+  # Check for NA or NULL values in the data
+  if (all(is.na(data[[input$feature]]))) {
+    return("Feature contains only NA values.")
+  }
+  
+  q1 <- quantile(data[[input$feature]], 0.25, na.rm = TRUE)
+  q3 <- quantile(data[[input$feature]], 0.75, na.rm = TRUE)
+  IQR <- q3 - q1
+  ub <- q3 + (1.5 * IQR)
+  lb <- q1 - (1.5 * IQR)
+  
+  return(paste0(
+    "Feature: ", input$feature, "\n",
+    "Q1 (25th percentile): ", round(q1, 2), "\n",
+    "Q3 (75th percentile): ", round(q3, 2), "\n",
+    "IQR: ", round(IQR, 2), "\n",
+    "Lower Bound for Outliers: ", round(lb, 2), "\n",
+    "Upper Bound for Outliers: ", round(ub, 2)
+  ))
+})
+  # Bivariate Analysis Logic
+  output$bi_plot <- renderPlotly({
+    # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+    req(input$analysis_type)  # Check if analysis_type is selected
+    # Initialize p as NULL
+      p <- ggplot() + 
+     annotate("text", x = 0.5, y = 0.5, label = "Please select an multivariate analysis tab and then select this plot type") +
+     theme_void()
+    # Using renderPlotly for interactive plots
+    if (is.null(input$analysis_type) || input$analysis_type == "") {
+      return(NULL)
+    }
+    if (input$analysis_type == "Views vs Subscribers") {
+      p <- ggplot(data, aes(x=subscribers, y=video_views))+geom_point()+geom_smooth(method=lm, se=FALSE, color="red")+labs(title="Subscribers vs Video Views", x="Subscribers", y="Video Views") + theme_minimal()+theme(legend.position="bottom")
+    } else if(input$analysis_type=="Top YouTuber By Category"){
+      p <- ggplot(data, aes(x=category))+geom_bar(fill="steelblue") +labs(title="Top Youtuber Categories", x="Category", y="No of Youtubers") +
+            theme_minimal() +theme(axis.text.x=element_text(angle=90, vjust=1))
+    } else if (input$analysis_type == "Education Enrollment vs Subscribers") {
+      # Aggregate data by Country and Gross tertiary education enrollment
+      # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+      aggregated_data <- data %>%
+      group_by(Country, `Gross tertiary education enrollment (%)`) %>%
+      summarise(total_subscribers = sum(subscribers, na.rm = TRUE), .groups = "drop")
+      p <- ggplot(aggregated_data, aes(x=`Gross tertiary education enrollment (%)`, y=total_subscribers, label=Country)) + 
+        geom_point(aes(color=Country), size=3) + 
+        geom_smooth(method="lm", se=FALSE, color="red", aes(group=1)) +  # This adds the regression line
+        labs(title="Gross Tertiary Education Enrollment vs Total Subscribers by Country", 
+        x="Gross Tertiary Education Enrollment (%)", 
+        y="Total Subscribers") +
+        theme_minimal() +
+        theme(legend.position="none")+geom_text(aes(label=Country), vjust=2, hjust=0.5, size=3)  # This will remove the legend
+    }
+       else if(input$analysis_type=="Countries with Most Top Youtubers"){
+       p <- ggplot(data, aes(x=Country)) + geom_bar(fill="coral") + 
+          labs(title="Countries with Most Top Youtubers", x="Country", y="Number of Youtubers") +theme_minimal()+
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    }
+      else if (input$analysis_type == "Urban Population vs Video Views") {
+      p <-  ggplot(data, aes(x=Urban_population, y=video_views)) + 
+        geom_point() + 
+        labs(title="Urban Population vs Video Views", x="Urban Population", y="Video Views")+theme_minimal()
+    } else if (input$analysis_type == "Views per Upload") {
+      
+      data$views_per_upload <- data$video_views / data$uploads
+          # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+      p <- ggplot(data, aes(x=uploads, y=views_per_upload)) + 
+        geom_point() + 
+        labs(title="Efficiency: Views per Upload", x="Number of Uploads", y="Views per Upload") +geom_smooth(method=lm)+theme_minimal()
+    } else if (input$analysis_type == "Earnings vs Views") {
+      p <-ggplot(data, aes(x=video_views, y=highest_yearly_earnings, color=category)) + 
+        geom_point() + 
+        labs(title="Yearly Earnings vs Video Views", x="Video Views", y="Yearly Earnings") +
+        geom_smooth(method=lm)+theme_minimal()+theme(legend.position = "bottom")
+    } else if (input$analysis_type == "Urbanization vs Popularity") {
+      country_urban <- data %>%
+        group_by(Country) %>%
+        summarize(mean_urban_population = mean(Urban_population, na.rm = TRUE), 
+                  total_subs = sum(subscribers, na.rm = TRUE))
+          # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+      p <-ggplot(country_urban, aes(x=mean_urban_population, y=total_subs)) + 
+        geom_point(aes(color=mean_urban_population)) + 
+        labs(title="Subscriber Base vs Urban Population", x="Urban Population (%)", y="Total Subscribers") +
+        geom_smooth(method=lm)+theme_minimal() +geom_text(aes(label=Country), vjust=2, hjust=0.5, size=3)
+    }
+    if (is.ggplot(p)) {  # Check if 'p' is a ggplot object
+      ggplotly(p)  # Convert ggplot object to plotly for interactivity
+    } else {
+      stop("click on multivariate analysis tab then start choosing analysis type starting from channel type diversity to till Heatmap of created month and created date.")
+    }
+  })
+  
+  # Multivariate Analysis Logic
+  output$multi_plot <- renderPlotly({
+    req(input$analysis_type)  # Check if analysis_type is selected
+    p <- ggplot() + 
+     annotate("text", x = 0.5, y = 0.5, label = "Please select an bi-variate analysis tab and then select this plot type") +
+     theme_void()
+    if (is.null(input$analysis_type) || input$analysis_type == "") {
+      return(NULL)
+    }
+    # Channel Type Diversity
+   if (input$analysis_type == "Channel Type Diversity") {
+         # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+    p <- ggplot(data, aes(fill=category, y=..count.., x=channel_type)) + 
+      geom_bar(position="fill") + 
+      labs(title="Category Diversity by Channel Type", x="Channel Type", y="Proportion") +
+      theme_minimal() +
+      scale_fill_brewer(palette="Set1")
+      
+    } # Geographical Spread vs. Unemployment Rate
+    else if (input$analysis_type == "Geographical Spread vs. Unemployment Rate") {
+      country_data <- data %>%
+  group_by(Country) %>%
+	  summarize(mean_unemployment = mean(`Unemployment rate`, na.rm = TRUE), total_youtubers = n())
+          # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+    p <- ggplot(country_data, aes(x=mean_unemployment, y=total_youtubers, size=total_youtubers)) + 
+      geom_point(aes(color=mean_unemployment)) + 
+      labs(title="Youtubers by Country Unemployment Rate", x="Unemployment Rate (%)", y="Number of Top Youtubers") +
+      theme_minimal() +
+      scale_color_gradient(low="blue", high="red")
+    }
+     # Heat map of created_month vs created_date
+  else if (input$analysis_type == "Heat map of created_month vs created_date") {
+    month_date_count <- data %>% group_by(created_month, created_date) %>% tally()
+        # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+    p <- ggplot(month_date_count, aes(x=created_month, y=created_date, fill=n)) + 
+      geom_tile() + 
+      labs(title="Heatmap of Channel Creation Dates", x="Month", y="Date") +
+      theme_minimal() +
+      scale_fill_gradient(low="white", high="blue")
+  } # Educational Enrollment and Youtuber Dominance
+  else if (input$analysis_type == "Educational Enrollment and Youtuber Dominance") {
+    country_education <- data %>%
+	  group_by(Country) %>%
+	  summarize(mean_education = mean(`Gross tertiary education enrollment (%)`, na.rm = TRUE), 
+	            total_subs = sum(subscribers, na.rm = TRUE))
+        # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+    p <-  ggplot(country_education, aes(x=mean_education, y=total_subs, size=total_subs)) + 
+      geom_point(aes(color=mean_education)) + 
+      labs(title="Subscriber Base vs Education Enrollment", x="Education Enrollment (%)", y="Total Subscribers") +
+      theme_minimal() +
+      scale_color_gradient(low="green", high="purple")
+    }
+    #Spatial Analysis
+    else if (input$analysis_type == "Spatial Analysis") {
+      library(rnaturalearth)
+      library(sf)
+      world <- ne_countries(scale = "medium", returnclass = "sf")
+          # Remove NA values from the data frame
+data <- na.omit(data)
+
+# Remove rows with Inf or -Inf in numerical columns
+numerical_feats <- names(data[sapply(data, is.numeric)])
+for (feat in numerical_feats) {
+  data <- data[!is.infinite(data[[feat]]), ]
+}
+
+# Update numerical_feats to reflect the cleaned data
+numerical_feats <- names(data[sapply(data, function(x) is.numeric(x) && all(complete.cases(x)))])
+      p <- ggplot(data = world) +
+      geom_sf() +
+      geom_point(data = data, aes(x = Longitude, y = Latitude, color = category), alpha = 0.7, size = 3) +
+      labs(title = "Geographical Distribution of Top Youtubers") +
+      theme_minimal() +
+      scale_color_brewer(palette="Dark2")
+  }
+  if (is.ggplot(p)) {  # Check if 'p' is a ggplot object
+      ggplotly(p)  # Convert ggplot object to plotly for interactivity
+    } else {
+      stop("click on Bi-Variate analysis tab then start viewing from Top Youtubers till Countries with Most Top Youtubers")
+    }
+})
+  # Error Handling
+  observeEvent(c(input$feature, input$analysis_type), {
+    validate(
+      need(!is.null(input$feature), "Please select a feature."),
+      need(!is.null(input$analysis_type), "Please select an analysis type.")
+    )
+  })
+  
+}
+
+# Run the app
+shinyApp(ui = ui, server = server)  #(OpenAI, 2023)
+
+```
+
+# References:
+
+>* OpenAI. (2023). Conversations with ChatGPT. Retrieved August 27, 2023, from https://chat.openai.com/
+>* Global YouTube Statistics 2023. (n.d.). Www.kaggle.com. https://www.kaggle.com/datasets/nelgiriyewithana/global-youtube-statistics-2023

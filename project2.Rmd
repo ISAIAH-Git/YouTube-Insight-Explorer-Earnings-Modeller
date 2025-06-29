@@ -1,0 +1,2018 @@
+---
+title: "CITS4009-2 Computational Data Analysis Project 2 - Modelling"
+author: "Isaiah RAMA VEERA (24078803) - (50%): all tasks & Martin MA (23811627) - (50%): all tasks"
+output:
+  html_document:
+    theme: cerulean
+    df_print: paged
+    toc: yes
+    toc_float: true
+    toc_depth: 3
+    number_sections: no
+    highlight: pygments
+    code_folding: show
+    fig_caption: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Shiny App: https://youtu.be/dsxiSs8np4M
+
+### Loading all the essential Libraries to load:
+```{r,warning=FALSE, message=FALSE}
+# Clearing the current R environment to start fresh
+rm(list = ls())
+
+# List of libraries to be loaded
+libraries <- c(
+  "purrr", "dplyr", "wordcloud", "RColorBrewer", 
+  "readr", "stringr", "shiny", "shinydashboard", 
+  "DT", "ggplot2", "plotly", "e1071", 
+  "rnaturalearth", "sf", "ggrepel", "mice", 
+  "sqldf", "Hmisc", "gridExtra", "ROCR",
+  "ggthemes", "knitr", "rpart", "rpart.plot",
+  "ROCit", "class", "fpc", "cluster",
+  "grDevices"
+)
+
+# Function to load libraries with error handling
+load_library <- function(lib) {
+  if (!requireNamespace(lib, quietly = TRUE)) {
+    cat("Library", lib, "is not installed.\n")
+  } else {
+    library(lib, character.only = TRUE)
+    cat("Library", lib, "has been loaded successfully.\n")
+  }
+}
+
+# Loading the libraries in a loop to handle potential loading failures gracefully
+invisible(lapply(libraries, load_library))#(OpenAI, 2023)
+
+# Set options to control the display of numbers (avoid scientific notation)
+options(scipen = 999)
+```
+
+## Loading and Viewing youtube_data:
+```{r,warning=FALSE, message=FALSE}
+# Defining the file path for the YouTube data CSV file
+file_path_youtube_data <- "./Data/youtube_UTF_8.csv"
+
+youtube_data <- read_csv(file_path_youtube_data, locale = locale(encoding = "UTF-8"))##(Global YouTube Statistics 2023, n.d.)
+#(OpenAI, 2023)
+
+head(youtube_data,5)
+```
+
+***Preliminary Data Analysis:*** The youtube_data data frame provides a snapshot of the data set revealing the number of rows and columns as well as offering a brief preview of the initial rows of information.
+
+## Conducting Duplicate Removal and Missing Data Check in youtube_data simultaneously:
+```{r,warning=FALSE, message=FALSE}
+
+# Defining a function to detect duplicate columns in a given data frame
+detect_duplicate_columns <- function(data) {
+  duplicates <- which(duplicated(as.list(data)))
+  return(unique(duplicates))
+}
+
+# Calling the function with the youtube_data data frame to find duplicate columns
+dup_cols <- detect_duplicate_columns(youtube_data)
+
+# Printing the total number of duplicate rows and columns in the data frame
+cat("Total no of duplicate rows:", sum(duplicated(youtube_data)), "\n")
+cat("Total no of duplicate columns:", length(dup_cols), "\n")
+
+# Counting the total number of missing data points in the data frame
+missing_data <- sum(is.na(youtube_data))#(OpenAI, 2023)
+
+# Counting the total number of cells in the data frame
+total_cells <- prod(dim(youtube_data))
+
+# Printing the total number of missing data points and the percentage of missing and present data
+cat("Total No of missing data points in the dataframe:", missing_data, "\n")
+cat("Total Percentage of the Missing Data:", 100 * (missing_data / total_cells), "%\n")
+cat("Total Percentage of the Present Data:", 100 * (1 - (missing_data / total_cells)), "%\n")
+cat("\nColumns with Missing Values:\n")
+print(colnames(youtube_data)[colSums(is.na(youtube_data)) > 0])
+```
+
+***Data Insights::*** In reviewing the data set we found that there are no duplicate rows or columns. The data reveals a total of 1,291 missing data points which constitutes 4.63% of the data set. Conversely 95.37% of the data is intact and present. Specific columns like video_views_rank, country_rank, channel_type_rank, video_views_for_the_last_30_days, subscribers_for_last_30_days, created_year, created_date, Gross tertiary education enrollment (%), Population, Unemployment rate, Urban_population, Latitude, and Longitude have been flagged for missing values providing a clearer picture of where the data gaps are.
+
+## Applying Data Cleaning & Transformation to YouTube Dataset:
+```{r,warning=FALSE, message=FALSE}
+
+# Cleaning You tuber and Title columns:
+
+# 1. Using str_replace_all to remove all characters other than letters, numbers, spaces, hyphens, and underscores.
+# 2. Using str_trim to remove leading and trailing whitespace.
+# 3. Using na_if to replace empty strings with NA values.
+youtube_data$Youtuber <- str_replace_all(youtube_data$Youtuber, "[^a-zA-Z0-9\\s-_]", "") %>% 
+  str_trim() %>% 
+  na_if("")
+
+youtube_data$Title <- str_replace_all(youtube_data$Title, "[^a-zA-Z0-9\\s-_]", "") %>% 
+  str_trim() %>% 
+  na_if("")
+
+# Handling the Null values and renaming columns:
+# 1. Using trimws to trim whitespace and then replacing empty strings with NA values in Youtuber and Title columns.
+# 2. Using the dplyr::rename function to rename columns for better readability and consistency.
+youtube_data$Youtuber[trimws(youtube_data$Youtuber) == ""] <- NA
+youtube_data$Title[trimws(youtube_data$Title) == ""] <- NA
+
+youtube_data <- youtube_data %>% rename(
+  video_views = `video views`,
+  Unemployment_rate = "Unemployment rate",
+  Gross_tertiary_education_enrollment_in_percentage = `Gross tertiary education enrollment (%)`
+)
+#(OpenAI, 2023)
+# Replacing "nan" values with NA:
+# 1. Defining a vector of column names that need to be cleaned.
+# 2. Using lapply to apply a function across these columns, which replaces "nan" values with NA.
+cols_to_clean <- c("Country", "Abbreviation", "channel_type", "created_month", "category")
+youtube_data[cols_to_clean] <- lapply(youtube_data[cols_to_clean], function(col) ifelse(col == "nan", NA, col))
+
+```
+
+***Data Cleaning Overview:*** In our data cleaning process we refined the Youtuber and Title columns of the data set a procedure consistent with our practices from Project 1. These columns initially containing various extraneous characters were sanitized to only include letters, numbers, spaces, hyphens, and underscores. Concurrently we trimmed any superfluous leading and trailing white spaces and replaced empty strings with NA values. To further the data set's clarity we renamed several columns for optimal readability. Lastly we transformed any 'nan' entries within specific columns to NA values ensuring data uniformity
+
+## Checking for Missing data after cleaning and performing essential transformations:
+```{r,warning=FALSE, message=FALSE}
+
+# Step 1: Counting the Total Number of Missing Data Points
+# Utilizing the is.na() function to identify missing values, and sum() to aggregate them across the data set.
+missing_data <- sum(is.na(youtube_data))
+cat("Total No of missing data points in the dataframe:", missing_data, "\n")
+
+# Step 2: Calculating the Overall Percentage of Present and Missing Data
+# Calculating the total number of cells in the data frame using prod() and dim().
+total_cells <- prod(dim(youtube_data))
+# Reusing the sum of missing data from Step 1 to calculate the percentage of missing and present data.
+cat("Total Percentage of the Missing Data:", 100 * (missing_data / total_cells), "%\n")
+cat("Total Percentage of the Present Data:", 100 * (1 - (missing_data / total_cells)), "%\n")
+
+# Step 3: Identifying Columns with Missing Values and Counting Missing Values Per Column
+# Utilizing the sapply() function to apply the is.na() and sum() functions to each column of the dataframe.
+missing_per_column <- sapply(youtube_data, function(x) sum(is.na(x)))
+# Filtering out columns with zero missing values to only show columns with missing data.
+columns_with_missing <- missing_per_column[missing_per_column > 0]
+
+# Step 4: Displaying the Results
+# Providing a well-formatted output to display the columns with missing values and the count of missing values per column.
+cat("\nColumns with Missing Values:\n")#(OpenAI, 2023)
+print(columns_with_missing)
+cat("\n")  # Providing a new line at the end for cleaner output formatting.
+```
+
+***Data Observation:*** Post our data cleaning procedures it's apparent that the number of missing values has escalated underscoring the need for a robust data imputation strategy. To break it down the data set currently exhibits 1,648 missing values. These gaps predominantly appear in columns like You tuber, category, Title, Country, Abbreviation, channel_type, video_views_rank, country_rank, channel_type_rank, video_views_for_the_last_30_days, subscribers_for_last_30_days, created_year, created_month, created_date, Gross_tertiary_education_enrollment_in_percentage, Population, Unemployment_rate, Urban_population, Latitude, and Longitude. Thus as we progress addressing these voids will be essential to maintain data integrity.
+
+## Implementing Project 1 Imputation Methods on YouTube Data:
+```{r,warning=FALSE, message=FALSE}
+# Improved Imputation Strategy:
+# A methodical approach to handle missing data which varies based on the data type of the columns:
+# - Median imputation for numeric columns.
+# - Mode imputation for categorical columns, and in absence of a mode, replacing with "Unknown".
+
+# Defining a function to calculate the mode of a vector
+getmode <- function(v) {
+  # Excluding NA values for mode calculation
+  v <- v[!is.na(v)]
+  
+  # Returning NULL for an empty vector (no mode exists)
+  if(length(v) == 0) return(NULL)
+  
+  # Calculating the mode by identifying the most frequent value
+  uniq_v <- unique(v)
+  mode_val <- uniq_v[which.max(tabulate(match(v, uniq_v)))]
+  
+  # If there's no mode (all values are unique), return NULL
+  if(length(mode_val) == 0) return(NULL)
+  
+  return(mode_val)
+}
+
+# Defining the impute_data function for data imputation
+impute_data <- function(data_col) {
+  if(is.numeric(data_col)) {
+    # Median imputation for numeric columns
+    return(ifelse(is.na(data_col), median(data_col, na.rm = TRUE), data_col))
+  } else if(is.factor(data_col) || is.character(data_col)) {
+    # Mode imputation for categorical columns
+    mode_val <- getmode(data_col)
+    
+    # If mode doesn't exist, replace with "Unknown"
+    if(is.null(mode_val)) mode_val <- "Unknown"
+    
+    return(ifelse(is.na(data_col), mode_val, as.character(data_col)))
+  } else {
+    # Return original data for unrecognized data types
+    return(data_col)
+  }
+}
+
+# Apply the impute_data function to each column of youtube_data for imputation
+youtube_data[] <- lapply(youtube_data, impute_data)
+
+# Validation: Counting the total number of missing data points post-imputation
+missing_data <- sum(is.na(youtube_data))
+cat("Number of missing data points post-imputation:", missing_data, "\n")
+
+# Checking the Overall Percentage of Present and Missing Data post-imputation
+total_cells <- prod(dim(youtube_data))
+total_missing <- sum(is.na(youtube_data))
+
+cat("Percentage of Missing Data post-imputation:", 100 * (total_missing / total_cells), "%\n")
+cat("Percentage of Present Data post-imputation:", 100 * (1 - (total_missing / total_cells)), "%\n")
+
+# Identify which columns still have missing values post-imputation, if any
+missing_per_column <- sapply(youtube_data, function(x) sum(is.na(x)))#(OpenAI, 2023)
+columns_with_missing <- missing_per_column[missing_per_column > 0]
+
+cat("\nColumns with Missing Values:\n")
+print(columns_with_missing)  #(OpenAI, 2023)
+```
+
+***Data Imputation Overview:*** We've employed a nuanced strategy for missing values. For numerical columns we substituted using the median ensuring the data's distribution remains consistent. Categorical columns were replaced with the mode. Notably unique columns like 'You tuber' and 'Title', which lack a predominant mode were labeled as "Unknown" to maintain clarity.
+
+## Loading and Viewing World Bank Data:
+```{r,warning=FALSE, message=FALSE}
+# Loading World Bank Data:
+# The World Bank dataset provides crucial economic indicators, which can offer insights into global economic trends.
+# The data is being loaded from a CSV file, where the first four rows are metadata and the actual data starts from the fifth row.
+
+# Specify the file path where the World Bank data CSV is located.
+file_path_worldbank <- "./Data/API_NY.GDP.PCAP.CD_DS2_en_csv_v2_5871588.csv"
+
+# Utilizing the read.csv function to load the data into the R environment.
+# The 'skip' argument is used to skip the first 4 rows of the file which are metadata, ensuring only the actual data is loaded.
+worldbank <- read.csv(file_path_worldbank, skip = 4)#(OpenAI, 2023)
+head(worldbank,5)
+```
+
+***Data Insight:*** Upon importing the World Bank dataset and examining it in Excel we noticed that the initial four rows were blank. Consequently we opted to skip these rows during the loading process by setting 'skip' to 4.
+
+## Inspecting and Cleaning Country Data in YouTube and World Bank Sets:
+```{r,warning=FALSE, message=FALSE}
+# Section 1: Printing Basic Information about World Bank Data
+# Understanding the dimensions and data types of the dataset is crucial for further analysis.
+
+# Display the number of rows and columns in the World Bank data
+cat("Number of Rows:", nrow(worldbank), "\n")
+cat("Number of Columns:", ncol(worldbank), "\n")
+
+# Display the data types of each column in the World Bank data
+cat("Column Types:")
+print(table(sapply(worldbank, class)))  # table summarizes the frequency of different data types
+
+# Section 2: Displaying NA values count per column
+# It's important to know the extent of missing values in each column before proceeding with data cleaning.
+print(colSums(is.na(worldbank)))
+
+# Section 3: Checking Matching of Country & Abbreviation against Country.Name & Country.Code Columns
+# This section aims at comparing unique values between YouTube and World Bank data for specified columns.
+cols_youtube <- c("Country", "Abbreviation")
+cols_worldbank <- c("Country.Name", "Country.Code", "Indicator.Name", "Indicator.Code")
+
+# Loop through each column name and print unique values from the respective dataset
+for (col_name in c(cols_youtube, cols_worldbank)) {
+  cat("\n", col_name, ":\n")
+  if (col_name %in% cols_youtube) {
+    unique_vals <- unique(youtube_data[[col_name]])
+  } else {
+    unique_vals <- unique(worldbank[[col_name]])
+  }
+  print(head(unique_vals))  # Print the first few unique values for preview
+  cat("Total number of unique values:", length(unique_vals), "\n")
+}
+
+cat("\n")
+
+# Section 4: Dropping Unnecessary Columns in World Bank Data
+# Simplifying the dataset by removing columns that are not needed for analysis.
+columns_to_drop <- c("Indicator.Name", "Indicator.Code", paste0("X", 1960:2021), "X")
+worldbank <- dplyr::select(worldbank, -all_of(columns_to_drop))
+
+# Section 5: Checking and Printing Non-matching Countries
+# Identifying countries that are present in YouTube data but not in World Bank data can highlight data inconsistencies.
+non_matching_countries <- setdiff(unique(youtube_data$Country), unique(worldbank$Country.Name))#(OpenAI, 2023)
+if (length(non_matching_countries) > 0) {
+  cat("Non-matching countries between YouTube and World Bank data:\n")
+  print(non_matching_countries)  # Print the list of non-matching countries
+}
+```
+
+***Data observation:*** The World Bank data set with its distinct number of rows and columns only contains character, logical, and numerical data types. An interesting facet of our examination is the comparison between YouTube's 'Country' and 'Abbreviation' columns and the World Bank's 'Country.Name' and 'Country.Code'. We discovered that while all YouTube abbreviations use a two-letter format, the World Bank opts for three-letter codes. This distinction suggests that merging the data sets will be best achieved by relying on the 'Country' column shared by both data sets. A pivotal observation is the presence of missing values in columns from X1960 to X2022 with the 'X' column potentially the GDP for 2023, devoid of any data. Consequently 'X2022' emerges as a viable alternative target post-data integration necessitating the removal of superfluous columns for optimization.
+
+Further exploration is needed regarding the mismatch between countries in the YouTube and World Bank data sets. This discrepancy could stem from varying naming conventions between YouTube's 'Country' column and the World Bank's 'Country.Code'. It's imperative to identify and rectify these variations to ensure successful data integration.
+
+## Identifying Rows with Non-Matching Countries:
+```{r,warning=FALSE, message=FALSE}
+# Section: Identifying Partially Matching Countries
+# The aim here is to find and print rows in the World Bank data where the country name partially matches any of the specified non-matching countries. This could help in identifying naming inconsistencies between datasets.
+
+# Defining a vector of non-matching countries based on previous analysis or external information.
+non_matching_countries <- c("Russia", "Korea", "Turk", "Venezuela", "Egypt")
+
+# Utilizing a nested sapply and apply combination to check for partial matches:
+# 1. The inner sapply iterates over each non_matching_country, checking if the beginning of any Country.Name in the World Bank data matches the non_matching_country.
+# 2. The outer apply with the argument `1` operates over rows, checking if any of the conditions in a row are TRUE (i.e., there's a partial match for any non_matching_country).
+# 3. The `grepl` function is used with the `paste0("^", x)` argument to construct a regex pattern that checks for a match at the beginning of the string.
+matching_rows <- apply(sapply(non_matching_countries, function(x) grepl(paste0("^", x), worldbank$Country.Name)), 1, any)
+
+# Subsetting the World Bank data to retain only the rows where there's a partial match with any of the non_matching_countries.
+matching_countries_data <- worldbank[matching_rows, ]#(OpenAI, 2023)
+
+# Printing the data of countries with partial matches to inspect and potentially correct naming inconsistencies.
+print(matching_countries_data)
+
+# The output will provide insights into the naming conventions in the World Bank data, which may require harmonization with the YouTube data for accurate merging or comparison.
+
+```
+
+***Data observation:*** From the provided World Bank data set entries it's evident that several countries have naming conventions distinct from the expected or standard names such as "Egypt, Arab Rep." instead of simply "Egypt", and "Korea, Rep." instead of "Korea". This underscores the need for renaming these entries appropriately to ensure a seamless and accurate merge with the YouTube data set.
+
+## Renaming Specific Country Names for Consistency:
+```{r,warning=FALSE, message=FALSE}
+# Section: Renaming Specific Country Names
+# The objective is to harmonize the naming of certain countries in the 'worldbank' dataset to facilitate accurate data joining with other datasets.
+
+worldbank <- worldbank %>%
+  mutate(Country.Name = case_when(
+    Country.Name == "Egypt, Arab Rep." ~ "Egypt",
+    Country.Name == "Venezuela, RB" ~ "Venezuela",
+    Country.Name == "Korea, Rep." ~ "South Korea",
+    Country.Name == "Turkiye" ~ "Turkey",
+    Country.Name == "Russian Federation" ~ "Russia",
+    TRUE ~ Country.Name  # This keeps the original name for countries that don't match any of the above conditions
+  ))
+
+# Section: Verifying the Renaming Operation
+# It's crucial to verify the renaming operation to ensure that the country names have been updated as intended.
+
+matching_countries_data <- worldbank[worldbank$Country.Name %in% c("Egypt", "Venezuela", "South Korea", "Turkey", "Russia"), ]#(OpenAI, 2023)
+
+# Printing the 'matching_countries_data' to verify that the country names have been updated correctly.
+print(matching_countries_data)
+```
+
+***Data observation:*** Post-renaming countries such as "South Korea" and "Egypt" now align more intuitively with common naming conventions. With these modifications in the World Bank data set it's crucial to validate the matching accuracy between YouTube and World Bank data sets to ensure a seamless integration.
+
+## Ensuring Consistency Cross-Checking Countries and Eliminating Duplicates Prior to Data Integration:
+```{r,warning=FALSE, message=FALSE}
+# Function Definition: check_non_matching_countries
+# This function is designed to identify and print country names present in the youtube_data but not in the worldbank data.
+
+check_non_matching_countries <- function(youtube_data, worldbank) {
+  # Extracting unique country names from both datasets:
+  unique_youtube_countries <- unique(youtube_data$Country)  # From youtube_data
+  unique_worldbank_countries <- unique(worldbank$Country.Name)  # From worldbank data
+  
+  # Identifying non-matching countries:
+  # Using set difference to find countries present in youtube_data but not in worldbank data.
+  non_matching_countries <- setdiff(unique_youtube_countries, unique_worldbank_countries)
+  
+  # Printing the non-matching countries:
+  # Conditional printing based on whether there are non-matching countries.
+  if(length(non_matching_countries) > 0) {
+    cat("The following countries in youtube_data do not exist in the worldbank data:\n")
+    print(non_matching_countries)
+  } else {
+    cat("All country names in youtube_data match with the worldbank data.\n")
+  }
+}
+
+# Function Call:
+# Executing the function to check for non-matching countries between youtube_data and worldbank data.
+check_non_matching_countries(youtube_data, worldbank)
+
+# Section: Identifying and Printing Duplicate Rows in World Bank Data
+# It's crucial to identify duplicate rows to ensure data integrity and accuracy.
+
+# Identifying duplicate rows in the worldbank data using the duplicated function.
+duplicate_rows <- duplicated(worldbank)
+
+# Printing the count of duplicate rows and the duplicate rows themselves (if any):#(OpenAI, 2023)
+cat("Number of duplicate rows:", sum(duplicate_rows), "\n")
+if (sum(duplicate_rows) > 0) {
+  cat("Displaying duplicate rows in world bank dataframe:\n")
+  print(worldbank[duplicate_rows, ])  # Subsetting worldbank data to show only duplicate rows.
+}
+
+# This structured approach ensures a clear and systematic check for data consistency and integrity.
+
+```
+
+***Data observation:*** Now all the data points of country column in youtube data match with the world bank country column data. So hence we can proceed for performing the merge after renaming the columns and attributes.
+
+## Refining the World Bank Dataset: Pruning Redundant Columns, Renaming Attributes, and Assessing Data Completeness:
+```{r,warning=FALSE, message=FALSE}
+# Section: Modifying the World Bank Data Structure
+# The aim here is to refine the column structure of the 'worldbank' data for better clarity and ease of use in subsequent analyses.
+
+# Dropping the 'Country.Code' column:
+# The 'Country.Code' column is being removed as it may not be necessary for further analysis.
+# The '<-' operator with NULL effectively removes this column from the dataframe.
+worldbank$Country.Code <- NULL
+
+# Renaming columns for better clarity:
+# Renaming columns to more descriptive names can facilitate understanding and analysis.
+# 1. Renaming the column labeled 'X2022' to 'GDP_2022_in_US_Dollars' to provide clear information on the data it holds.
+# 2. Renaming the column labeled 'Country.Name' to 'Country' for simplicity and consistency with other datasets.
+colnames(worldbank)[colnames(worldbank) == "X2022"] <- "GDP_2022_in_US_Dollars"#(OpenAI, 2023)
+colnames(worldbank)[colnames(worldbank) == "Country.Name"] <- "Country"
+
+# Section: Checking for Missing Values
+# It's crucial to identify the presence of missing values in the dataset to plan for data cleaning and imputation strategies.
+
+# Calculating and printing the total count of missing values across the entire 'worldbank' dataframe.
+# The is.na() function identifies missing values, and sum() calculates the total count.
+# Printing the count provides a quick overview of the extent of missing data.
+missing_values_count <- sum(is.na(worldbank))
+cat("Total count of missing values in the worldbank data:", missing_values_count, "\n")
+
+# This organized approach provides a streamlined structure to the data, making it ready for further analysis.
+
+```
+
+***Data observation:*** Notably there are some missing values present in the World Bank data set. We'll address these after performing a left join between the YouTube data and the World Bank data to ensure a comprehensive and clean analysis.
+
+## Integrating YouTube Dataset with World Bank Information via a Left Join:
+```{r,warning=FALSE, message=FALSE}
+# Section: SQL Query Execution for Data Joining
+# The objective here is to perform a join operation between 'youtube_data' and 'worldbank' datasets on the 'Country' column. The result will be a merged dataset with an additional column 'GDP_2022_in_US_Dollars' from the 'worldbank' dataset.
+
+# Defining the SQL Query:
+# A SQL query string is defined to specify the join operation.
+# 1. The SELECT statement specifies the columns to be retrieved - all columns from 'youtube_data' and 'GDP_2022_in_US_Dollars' from 'worldbank'.
+# 2. The FROM statement specifies the primary dataset - 'youtube_data'.
+# 3. The LEFT JOIN statement is used to combine 'youtube_data' with 'worldbank' based on the 'Country' column.
+# 4. The ON statement specifies the joining condition - matching the 'Country' column in both datasets.
+query <- "
+  SELECT youtube_data.*, worldbank.GDP_2022_in_US_Dollars
+  FROM youtube_data
+  LEFT JOIN worldbank
+  ON youtube_data.Country = worldbank.Country
+"
+
+# Execute the SQL Query:#(OpenAI, 2023)
+# Utilizing the 'sqldf' function to execute the defined SQL query.
+# The result, which is a dataframe with the joined data, is assigned back to 'youtube_data'.
+# This updated 'youtube_data' now contains an additional column 'GDP_2022_in_US_Dollars' from the 'worldbank' dataset.
+youtube_data <- sqldf(query)
+
+# This section effectively merges relevant data from 'worldbank' into 'youtube_data' based on the 'Country' column, expanding the information available for further analysis.
+
+```
+
+***Insightful Analysis:***  Leveraging SQL for data merging offers a streamlined approach seamlessly blending the data sets. By integrating the 'youtube_data' and 'worldbank' datasets on the 'Country' attribute we have enhanced the depth of our data. The inclusion of the 'GDP_2022_in_US_Dollars' column from the 'worldbank' dataset into 'youtube_data' not only enriches the data but also paves the way for more comprehensive insights. The SQL syntax due to its inherent clarity and simplicity proves to be an advantageous method for executing such tasks.
+
+## Taking a Glimpse at the Refined Dataset:
+```{r,warning=FALSE, message=FALSE}
+# Section: Viewing the Cleaned Data
+# After performing data cleaning and joining operations, it's essential to view the resulting data to ensure the operations were successful and to understand the current data structure.
+
+# Viewing the Top Rows of the Cleaned Data:
+# The head() function is used to display the first six rows of the 'youtube_data' dataframe.
+# This provides a quick overview of the data, including the newly added 'GDP_2022_in_US_Dollars' column and any other transformations that have been applied.#(OpenAI, 2023)
+head(youtube_data,5)
+```
+
+***Data observation:*** Examining the top entries from our consolidated data set gives us a snapshot of the merge results and column structures.
+
+## Looking for missing values within the data frame after performing in the left join:
+
+```{r,warning=FALSE, message=FALSE}
+# Section: Handling Missing Data
+# It's essential to quantify and address missing data to ensure the quality and reliability of the analysis.
+
+# Step 1: Counting Total Missing Values
+# Using the combination of sum() and is.na() to count the total number of missing values across the entire 'youtube_data' dataframe.
+total_missing_values <- sum(is.na(youtube_data))  # Assigning the result to 'total_missing_values' variable.
+
+# Printing the initial count of missing values:
+cat("Total number of missing values in the dataset before omission:", total_missing_values, "\n")#(OpenAI, 2023)
+
+# Step 2: Omitting Rows with Missing Values
+# Using na.omit() function to remove all rows with any missing values from 'youtube_data'.
+# This is a straightforward method to handle missing data by complete case analysis.
+youtube_data <- na.omit(youtube_data)
+
+# Step 3: Verifying the Omission of Missing Values
+# Re-calculating and printing the count of missing values post omission to verify that all missing values have been successfully omitted.
+total_missing_values <- sum(is.na(youtube_data))  # Updating the 'total_missing_values' variable with the new count post omission.
+cat("Total number of missing values in the dataset post omission:", total_missing_values, "\n")
+```
+
+***Data observation:*** After the join, we observed 3 missing values within the data set. To maintain data integrity and consistency, these entries were promptly excluded. Our refined data set now has no missing values, ensuring a more accurate subsequent analysis.
+
+## Checking for the outliers in the merged dataset
+```{r,warning=FALSE, message=FALSE}
+# Section: Outliers Detection
+# This section is dedicated to identifying and analyzing outliers within the numeric columns of the 'youtube_data' dataset.
+
+# Function Definition: count_outliers
+# This function calculates the number and proportion of outliers in a numeric vector using the IQR method.
+count_outliers <- function(x) {
+  # Handling NA values: Omitting NA values as they can distort the quartile and outlier calculations.
+  x <- na.omit(x)
+  
+  # Quartile Calculations:
+  # Calculating the first and third quartiles (Q1 and Q3) which are used to determine the interquartile range (IQR).
+  Q1 <- quantile(x, 0.25)
+  Q3 <- quantile(x, 0.75)
+  IQR <- Q3 - Q1  # Interquartile Range Calculation
+  
+  # Outlier Boundaries:
+  # Defining the lower and upper bounds for outliers based on the IQR.
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  # Outliers Counting:
+  # Counting the number of values that fall below the lower bound or above the upper bound - these are considered outliers.
+  num_outliers <- sum(x < lower_bound | x > upper_bound)
+  
+  # Proportion Calculation:
+  # Calculating the proportion of outliers in the column.
+  prop_outliers_column <- num_outliers / length(x)
+  
+  return(c(num_outliers, prop_outliers_column))  # Returning both the count and proportion of outliers.
+}
+
+# Identifying Numeric Columns:
+# Extracting the names of numeric columns from 'youtube_data' for outlier analysis.
+numeric_columns <- names(youtube_data)[sapply(youtube_data, is.numeric)]
+
+# Initialize Storage Vectors:
+# Initializing vectors to store the outliers count and proportion for each numeric column.
+outliers_count <- numeric(length(numeric_columns))
+outliers_prop_column <- numeric(length(numeric_columns))
+
+# Loop Through Numeric Columns:
+# Iterating through each numeric column and applying the 'count_outliers' function to calculate outliers statistics.
+for (i in seq_along(numeric_columns)) {
+  results <- count_outliers(youtube_data[[numeric_columns[i]]])
+  outliers_count[i] <- results[1]
+  outliers_prop_column[i] <- results[2]
+}
+
+# Proportion of Outliers in Entire Dataset:
+# Calculating the proportion of outliers across the entire dataset for a holistic view.
+total_data_points <- sum(sapply(youtube_data[, numeric_columns], length))
+outliers_prop_whole <- sum(outliers_count) / total_data_points
+
+# Consolidating Outliers Information:
+# Creating a data frame to consolidate and display the outliers information per numeric column.
+outliers_df <- data.frame(Column = numeric_columns, 
+                          Num_Outliers = outliers_count, 
+                          Prop_Outliers_Column = outliers_prop_column)
+
+# Filtering Out Columns with Outliers:
+# Filtering the data frame to retain only the columns that have outliers for focused analysis.
+outliers_df <- outliers_df[outliers_df$Num_Outliers > 0, ]#(OpenAI, 2023)
+
+# Printing Outliers Information:
+# Displaying the data frame with outliers information to understand the distribution and presence of outliers in the dataset.
+print(outliers_df)
+
+# This structured and detailed approach aids in the thorough analysis of outliers, which is critical for accurate data analysis.
+
+```
+
+***Data observation:*** The table reveals outliers across various metrics in the merged data set. These outliers might signify exceptionally high-performing YouTube channels or unique country-specific traits. However, considering the nature of our data, these deviations could represent the real dynamism in YouTube's success across countries. Analyzing these outliers will grant us a deeper understanding and may uncover interesting trends or insights in our data. Lets look at the overall proportion of outliers within the whole data set.
+
+## Printing the proportion of outliers in the whole dataset
+```{r,warning=FALSE, message=FALSE}
+# Section: Displaying Outliers Proportion for the Entire Dataset
+# It's important to understand the overall proportion of outliers across the entire dataset as it can impact the analysis and insights.
+
+# Displaying the Proportion of Outliers:
+# Utilizing the cat() function to display a formatted message indicating the proportion of outliers in the entire dataset.
+# 'outliers_prop_whole' variable contains the calculated proportion of outliers, which is displayed alongside a descriptive message.
+cat("Proportion of outliers in the whole dataset:", outliers_prop_whole*100, "\n")#(OpenAI, 2023)
+
+# Note:
+# This step provides a high-level view of the outliers' presence across the dataset.
+# A high proportion of outliers may warrant further investigation or data cleaning to ensure reliable analysis.
+
+```
+
+***Data observation:*** Eliminating the 7.180169% outliers, relative to the entire data set enhances the accuracy of our predictive modeling by adhering to statistical assumptions. This not only facilitates more lucid visualizations but also upholds the integrity of the data paving the way for a more streamlined analysis. But within the YouTube data set outliers could signify uncommon viral trends. While wholesale removal of these outliers might not be judicious it's prudent to address those in the 'lowest_yearly_earnings' and 'highest_yearly_earnings' columns. As we aim to establish a 'earning level' target variable these outliers could skew and adversely influence predictions. Thus strategic removal from these specific columns promises a more precise outcome.
+
+## Removing Outliers from the Youtube Dataset:
+```{r,warning=FALSE, message=FALSE}
+# Section: Outliers Removal
+# Outliers can distort statistical analyses and models. This section is dedicated to removing outliers from specified columns.
+
+# Function Definition: remove_outliers
+# This function identifies and removes outliers from a specified column within a data frame, using the IQR method.
+remove_outliers <- function(data, column_name) {
+  # Quartile Calculations:
+  # Calculating the first and third quartiles (Q1 and Q3) of the specified column, excluding NA values.
+  Q1 <- quantile(data[[column_name]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(data[[column_name]], 0.75, na.rm = TRUE)
+  
+  # Interquartile Range (IQR) Calculation:
+  # The IQR is the range within which the bulk of the data falls.
+  IQR <- Q3 - Q1
+  
+  # Outlier Boundaries:
+  # Defining the lower and upper bounds for outliers based on the IQR.
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  # Data Filtering:
+  # Filtering the data to exclude values outside the defined lower and upper bounds.
+  data <- data[data[[column_name]] >= lower_bound & data[[column_name]] <= upper_bound, ]
+  
+  return(data)  # Returning the filtered data with outliers removed.
+}
+
+# Listing Current Column Names:
+# Displaying the current column names for reference before outliers removal.
+cat("Column names before outliers removal:\n")
+print(names(youtube_data))
+
+# Removing Outliers:
+# Applying the remove_outliers function to specified columns to remove outliers.
+youtube_data <- remove_outliers(youtube_data, "lowest_yearly_earnings")
+youtube_data <- remove_outliers(youtube_data, "highest_yearly_earnings")
+
+
+# Listing Column Names Post-Outliers Removal:
+# Displaying the column names again for reference, ensuring that no columns were inadvertently removed.
+cat("Column names after outliers removal:\n")#(OpenAI, 2023)
+print(names(youtube_data))
+
+# Viewing the Data:
+# Displaying the first few rows of the data post-outliers removal to observe the resulting data.
+cat("Data snapshot post-outliers removal:\n")
+head(youtube_data,5)
+
+# Note:
+# This step helps in reducing the skewness and improving the overall distribution of the data, 
+# which is crucial for certain statistical analyses and machine learning models.
+
+```
+
+***Data observation:*** To fine-tune our analysis we selectively address outliers in the 'lowest' and 'highest yearly earnings' columns ensuring they don't skew the criteria for our target variable. However, we consciously retain outliers in other columns. These outliers are integral to crafting a well-rounded model as we need to taken in account the extreme trends which are unpredictable. Our aim is to design a versatile model that can perform robustly on diverse and unseen data. A model that captures average trends is often more reliable than one overly tailored to a specific data set. By including outliers, we mirror real-world scenarios where data isn't always pristine thereby training our model to be adaptive and resilient.
+
+## Validating outlier removal to ensure remaining outliers are still intact:
+```{r,warning=FALSE, message=FALSE}
+# Section: Outliers Detection Post-Removal
+# This section is dedicated to re-evaluating the presence of outliers in the dataset after the removal process.
+
+# Initialization:
+# Initializing vectors to store the count and proportion of outliers for each numeric column post outliers removal.
+outliers_count_post_removal <- numeric(length(numeric_columns))
+outliers_prop_column_post_removal <- numeric(length(numeric_columns))
+
+# Loop Through Numeric Columns:
+# Iterating through each numeric column to apply the 'count_outliers' function and gather outliers statistics post removal.
+for (i in seq_along(numeric_columns)) {
+  column_name <- numeric_columns[i]
+  results <- count_outliers(youtube_data[[column_name]])
+  outliers_count_post_removal[i] <- results[1]
+  outliers_prop_column_post_removal[i] <- results[2]
+}
+
+# Consolidating Outliers Information Post-Removal:
+# Creating a data frame to consolidate and display the outliers information per numeric column post removal.
+outliers_df_post_removal <- data.frame(Column = numeric_columns, 
+                                       Num_Outliers = outliers_count_post_removal, 
+                                       Prop_Outliers_Column = outliers_prop_column_post_removal)
+
+# Filtering Out Columns with Outliers:
+# Filtering the data frame to retain only the columns that have outliers for focused analysis.
+outliers_df_post_removal <- outliers_df_post_removal[outliers_df_post_removal$Num_Outliers > 0, ]
+
+# Printing Outliers Information Post-Removal:
+# Displaying the data frame with outliers information post removal to understand the distribution and presence of outliers.
+print(outliers_df_post_removal)#(OpenAI, 2023)
+
+# Note:
+# This step allows us to evaluate the efficacy of the outliers removal process.
+# A significant reduction or absence of outliers indicates that the removal process has been successful in cleaning the data.
+```
+
+***Data observation:*** Verifying that all remaining outliers are intact within the data set. Proceeding further to create the target variable.
+
+## Refining Data and Establishing a Target Variable Using a Defined Random Threshold:
+```{r,warning=FALSE, message=FALSE}
+# Step 1: Setting up a random assumption
+threshold <- 50
+
+# Step 2: Calculating Average Earnings
+# The 'average_earnings' column is created by averaging 'highest_yearly_earnings' and 'lowest_yearly_earnings' for each record.
+youtube_data$average_earnings <- (youtube_data$highest_yearly_earnings + youtube_data$lowest_yearly_earnings) / 2
+
+# Step 3: Creating Binary Target Variable 'Earning_level'#(OpenAI, 2023)
+# The 'Earning_level' column is created based on the ratio of 'average_earnings' to 'GDP_2022_in_US_Dollars' compared to the threshold.
+# If the ratio exceeds the threshold, 'Earning_level' is set to 'High'; otherwise, it's set to 'Low'.
+youtube_data$Earning_level <- ifelse(youtube_data$average_earnings / youtube_data$GDP_2022_in_US_Dollars > threshold, "High", "Low")
+```
+
+***Data observation:*** Having transitioned from the data cleaning and transformation phase it's pivotal to ascertain whether our data set is balanced or not?. Ensuring an even distribution of the target variable is crucial. If it's not evenly distributed we may need to implement techniques like up sampling or down sampling to achieve equilibrium in the data set.
+
+## Checking Class Balance to check whether the dataset is a balanced one or not?:
+```{r,warning=FALSE, message=FALSE}
+# Section: Class Balance Verification
+# This section is dedicated to verifying the balance of classes in the binary target variable 'Earning_level'.
+
+# Step 1: Calculating Class Proportions
+# The 'class_proportions' vector is created to store the proportions of each class in the 'Earning_level' variable.
+class_proportions <- table(youtube_data$Earning_level) / nrow(youtube_data)
+
+# Print Class Proportions
+# The proportions of each class are printed for inspection.
+print(class_proportions)
+
+# Step 2: Dataset Balance Check
+# A check is performed to determine if the dataset is balanced.
+# A dataset is considered balanced if the proportions of each class are within the range [0.4, 0.6].
+# The result of this check is printed for user reference.
+balance_check_result <- ifelse(
+  all(class_proportions >= 0.4 & class_proportions <= 0.6),
+  "The dataset is balanced.\n",
+  "The dataset is imbalanced.\n"
+)
+cat(balance_check_result)#(OpenAI, 2023)
+
+# Note:
+# Verifying class balance is a crucial step in preparing data for machine learning tasks.
+# It helps in understanding the distribution of classes which could impact the performance of classification models.
+# The range [0.4, 0.6] is a common criterion for balance.
+```
+
+***Data observation:*** The dataset exhibits a near-balanced distribution. This is an encouraging sign indicating that we can proceed directly to the model-building phase without needing further balancing adjustments.
+
+
+# Approach 1:
+
+We aim to forecast the future earning potential of emerging YouTubers using the "earning_level" metric. By gauging this potential early on businesses can strategically invest in advertising on channels poised for popularity. This proactive approach allows companies to capitalize on the YouTuber's rising fame, ensuring maximum reach for their advertisements. Consequently, businesses can effectively monetize their marketing campaigns, leading to increased sales and enhanced brand visibility, by aligning with these up-and-coming influencers.
+
+## Part 1 - Classification Choosing the response (target) variable : Combination 1:
+
+```{r,warning=FALSE, message=FALSE}
+# --------------------------------------------------
+# Feature Selection for YouTube Data
+# --------------------------------------------------
+ new_youtube_data = youtube_data
+
+# Load necessary libraries
+library(caret)
+
+# -----------------------------
+# Remove Redundant Variables
+# -----------------------------
+# 1. Abbreviation - Shorter form of Country.
+# 2. rank - Might lead to data leakage.
+# 3. Title - Might not be directly predictive.
+# 4. lowest_monthly_earnings and highest_monthly_earnings - Direct leakage.
+
+cols_to_remove <- c("Abbreviation", "rank", "Title", "lowest_monthly_earnings", "highest_monthly_earnings")
+new_youtube_data <- new_youtube_data[ , !(names(new_youtube_data) %in% cols_to_remove)]
+
+# --------------------------------
+# Feature Engineering
+# --------------------------------
+
+# 1. Engagement Rate: Helps gauge the engagement of subscribers.
+new_youtube_data$EngagementRate <- new_youtube_data$video_views / new_youtube_data$subscribers
+
+# 2. Convert created_month to a numeric form for better model interpretability.
+months_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+new_youtube_data$created_month_numeric <- as.numeric(factor(new_youtube_data$created_month, levels = months_order))
+
+# 3. Convert Earning_level to a factor for modeling.
+new_youtube_data$Earning_level <- as.factor(new_youtube_data$Earning_level)
+
+# --------------------------
+# Data-driven Feature Selection
+# --------------------------
+
+# 1. Correlation Analysis
+numeric_vars <- sapply(new_youtube_data, is.numeric)
+cor_matrix <- cor(new_youtube_data[ , numeric_vars])
+
+# High correlation might suggest redundancy. Review 'cor_matrix' and decide if any feature needs to be dropped based on correlation values.
+
+# Remove the diagonal from the correlation matrix (we're not interested in the correlation of a variable with itself)
+cor_matrix[lower.tri(cor_matrix)] <- NA
+
+# Find pairs with correlation above a given threshold (e.g., 0.9)
+highly_correlated <- which(abs(cor_matrix) > 0.9, arr.ind = TRUE)
+
+# Print out pairs of highly correlated features
+if(nrow(highly_correlated) > 0){
+  cat("Pairs of highly correlated variables:\n")
+  for(i in 1:nrow(highly_correlated)){
+    cat(names(new_youtube_data)[highly_correlated[i, "row"]], 
+        "and", 
+        names(new_youtube_data)[highly_correlated[i, "col"]], 
+        "with correlation", 
+        cor_matrix[highly_correlated[i, "row"], highly_correlated[i, "col"]], 
+        "\n")
+  }
+} else {
+  cat("No pairs of variables are correlated above the threshold.\n")
+}
+
+
+cols_to_remove <- unique(names(new_youtube_data)[highly_correlated[ , "row"]])
+
+cat("\nSuggested columns to remove based on high correlation:\n")#(OpenAI, 2023)
+print(cols_to_remove)
+
+
+# 2. Recursive Feature Elimination (RFE) using caret package
+
+# First, specify the control method for RFE
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+
+# Split data into predictors and outcome
+predictors <- new_youtube_data[, !(names(new_youtube_data) %in% "Earning_level")]
+outcome <- new_youtube_data$Earning_level
+
+# Run RFE
+#results <- rfe(predictors, outcome, sizes=c(1:ncol(predictors)), rfeControl=control)
+
+# View feature rankings. Features with higher ranks are more predictive.
+#print(results)
+```
+
+## Feature selection methodology for combination 1:
+
+We have selected features like Longitude,GDP_2022_in_US_Dollars, average_earnings, EngagementRate, created_month_numeric. Using the Recursive Feature Selection (RFS) method three variables were chosen for the predictive model based on their performance: GDP_2022_in_US_Dollars, lowest_yearly_earnings, and average_earnings. Despite the high correlation of lowest_yearly_earnings with other variables it was still among the top three in the RFS process indicating its significance in the selected model. The selection process was driven by the iterative RFS approach which evaluates model performance as the number of variables changes aiming to find the optimal combination for prediction.
+
+## Domain specific assumptions relevant to combination 1 and building the single variable model for combination 1:
+
+For our YouTube-centric analysis we have selected the features: Longitude, GDP_2022_in_US_Dollars, average_earnings, EngagementRate, and created_month_numeric. Several domain-specific assumptions influenced these choices:
+
+Longitude: This might be relevant as the geographical location of a YouTube content creator or their audience can influence viewership patterns, preferences, and engagement.
+
+GDP_2022_in_US_Dollars: A country's GDP can correlate with its internet penetration, digital advertisement spending and purchasing power all of which can affect a YouTuber's revenue and viewership.
+
+average_earnings: Earnings metrics are direct indicators of a channel's profitability and success on the YouTube platform.
+
+EngagementRate: In the YouTube domain engagement (likes, comments, shares) is often more valued than mere views. A higher engagement rate can lead to better video rankings and more organic reach.
+
+created_month_numeric: The month a video or channel was created might influence its growth trajectory, considering seasonality and annual events.
+
+The Recursive Feature Selection (RFS) process highlighted the importance of GDP_2022_in_US_Dollars, lowest_yearly_earnings, and average_earnings. Despite potential multicollinearity concerns the significance of these variables in the YouTube context—where economic indicators can intertwine with content profitability—warranted their inclusion.
+```{r,warning=FALSE, message=FALSE}
+# -------------------------------
+# Data Preprocessing
+# -------------------------------
+
+# Step 1: Libraries and Preprocessing
+# Loading libraries
+#install.packages(c("caret", "e1071", "pROC","klaR"))
+library(caret)
+library(e1071)
+library(pROC)
+library(klaR)
+
+# Data Preprocessing
+new_youtube_data <- new_youtube_data[, !(names(new_youtube_data) %in% cols_to_remove)]
+char_cols <- sapply(new_youtube_data, is.character)
+new_youtube_data[, char_cols] <- lapply(new_youtube_data[, char_cols], factor)
+
+# -------------------------------
+# Train-Test Split
+# -------------------------------
+
+set.seed(123) # Setting seed for reproducibility
+
+# Splitting the dataset into 80% training and 20% testing
+train_index <- createDataPartition(new_youtube_data$Earning_level, p = 0.8, list = FALSE)
+train_data <- new_youtube_data[train_index, ]
+test_data <- new_youtube_data[-train_index, ]
+
+# Ensure you've loaded the necessary libraries
+library(ggplot2)
+library(caret)
+library(e1071)
+
+# List of variables to iterate over
+variables <- c("Longitude", "GDP_2022_in_US_Dollars", "average_earnings", "EngagementRate", "created_month_numeric")
+
+for (column in variables) {
+  # -------------------------------
+  # Single Variable Logistic Regression Model
+  # -------------------------------
+  formula_str <- paste("Earning_level ~", column)#(OpenAI, 2023)
+  single_var_model <- glm(as.formula(formula_str), data = train_data, family = "binomial")
+  single_var_predictions_prob <- predict(single_var_model, test_data, type = "response")
+  single_var_predictions_factor <- factor(ifelse(single_var_predictions_prob > 0.5, "High", "Low"), levels=c("High", "Low"))
+
+  
+  # Compute the confusion matrix and print
+  single_var_conf_matrix <- confusionMatrix(single_var_predictions_factor, test_data$Earning_level)
+  print(paste("Confusion Matrix for Logistic Regression using", column))
+  print(single_var_conf_matrix)
+  
+  # -------------------------------
+  # Single Variable SVM Model
+  # -------------------------------
+  svm_model <- svm(as.formula(formula_str), data = train_data, kernel = "radial")
+  svm_predictions <- predict(svm_model, test_data)
+  svm_conf_matrix <- confusionMatrix(svm_predictions, test_data$Earning_level)
+  print(paste("Confusion Matrix for SVM using", column))
+  print(svm_conf_matrix)
+  
+  # Training accuracy
+  train_svm_predictions <- predict(svm_model, train_data)
+  train_svm_acc <- sum(train_svm_predictions == train_data$Earning_level) / nrow(train_data)
+
+  # Testing accuracy
+  test_svm_acc <- svm_conf_matrix$overall["Accuracy"]
+  
+  cat(paste("Training accuracy for SVM using", column, ":", train_svm_acc, "\n"))
+  cat(paste("Testing accuracy for SVM using", column, ":", test_svm_acc, "\n"))
+  
+  # -------------------------------
+  # Density Plot for each variable filled by Earning_level
+  # -------------------------------
+  print(ggplot(train_data, aes_string(x = column, fill = "Earning_level")) +
+        geom_density(alpha = 0.5) +
+        labs(title = paste("Density Plot of", column, "by Earning_level"),
+             x = column,
+             y = "Density") +
+        theme_minimal())
+}
+
+```
+
+***Data observation:*** When analyzing YouTube data for predicting the earning_level the results present some intriguing insights:
+
+For YouTube creators spread across different geographic locations the longitude of the content creator becomes a significant variable. The SVM model showcasing an accuracy of 72.78%, evidently outshines the Logistic Regression model which stands at 24.85%. This underscores that for YouTube creators whose location or audience geolocation might significantly impact their earning levels the SVM model offers superior predictability.
+
+Considering the economic backdrop the GDP data from 2022 when represented in US dollars emphasizes the efficacy of the SVM model. With an accuracy of 84.02% it significantly supersedes the Logistic Regression model at 18.34%. This indicates that for YouTube creators operating in different economies the intricacies of those economies as represented by GDP are better captured by SVM. Thus the earning potential based on economic indicators is more accurately predicted by SVM.
+
+When assessing the average earnings of YouTube creators the SVM model with its 72.78% accuracy stands tall compared to the Logistic Regression's 28.99%. Furthermore its specificity at 95% accentuates its capability to correctly identify creators with 'Low' earning levels. Therefore for advertisers or stakeholders interested in understanding the earning brackets of creators SVM emerges as the more dependable model.
+
+Diving into engagement rates a pivotal metric for any YouTuber the Logistic Regression model surprisingly outperforms SVM with a 42.6% accuracy. However a significant red flag is its low specificity of 7%. This implies that while it might predict higher engagement rates it may not always be correct especially for 'Low' values. Given the importance of engagement for monetization strategies on YouTube stakeholders might need to consider alternative modeling techniques for a more accurate prediction.
+
+Analyzing videos based on their month of creation reveals another challenge. Neither model provides a robust prediction with both circling around a 59% accuracy. The glaring biases—Logistic Regression's inclination to predict all as 'High' earners and SVM's tendency to predict all as 'Low' earners—suggest that the time of video creation might not be a significant predictor of earning levels on YouTube.
+
+In conclusion for business to run their ads on youtube they are keen on decoding the earning potential of YouTube creators while the SVM model generally offers more reliable results certain aspects like engagement rates and the time of video creation require more nuanced modeling approaches. It's essential to validate models rigorously and possibly integrate various predictive techniques for a comprehensive understanding of the YouTube earning landscape.
+
+To understand the earning potential of YouTube creators more comprehensively while SVM has strengths it's necessary to diversify our modeling approach. The Decision Tree model provides clear interpretable insights highlighting the significant features affecting earnings. Meanwhile the Naive Bayes model offers probabilistic predictions, aiding businesses in assessing classification confidence and risk.
+
+From a data science angle Decision Trees adeptly manage non-linearity and categorical data capturing complex data relationships. Naive Bayes scalable and proficient with high-dimensional data complements this by addressing the vast variety inherent in YouTube data.
+
+In essence for a holistic view of YouTube earning dynamics and optimized ad strategies integrating Decision Tree and Naive Bayes models is both beneficial and essential.
+
+## Multivariable Model using Decision tree and Naive Bayes Model:
+```{r,warning=FALSE, message=FALSE}
+
+# -------------------------------
+# Decision Tree Model
+# -------------------------------
+
+# Loading the necessary library
+library(rpart)
+
+# Training the Decision Tree model
+decision_tree <- rpart(Earning_level ~ ., data = train_data, method = "class")
+
+# Making Predictions
+tree_predictions <- predict(decision_tree, test_data, type = "class")
+
+# Evaluating the Decision Tree model
+tree_conf_matrix <- confusionMatrix(tree_predictions, test_data$Earning_level)
+print(tree_conf_matrix)
+
+# Training accuracy for Decision Tree
+train_tree_predictions <- predict(decision_tree, train_data, type = "class")
+train_tree_acc <- sum(train_tree_predictions == train_data$Earning_level) / nrow(train_data)
+
+# Testing accuracy for Decision Tree
+test_tree_acc <- tree_conf_matrix$overall["Accuracy"]
+
+# -------------------------------
+# Naive Bayes Model
+# -------------------------------
+
+# Loading the necessary library
+library(e1071)
+
+# Training the Naive Bayes model
+naive_bayes <- naiveBayes(Earning_level ~ ., data = train_data)
+
+# Making Predictions
+bayes_predictions <- predict(naive_bayes, test_data)
+
+# Evaluating the Naive Bayes model
+bayes_conf_matrix <- confusionMatrix(bayes_predictions, test_data$Earning_level)
+print(bayes_conf_matrix)
+
+# Training accuracy for Naive Bayes
+train_bayes_predictions <- predict(naive_bayes, train_data)
+train_bayes_acc <- sum(train_bayes_predictions == train_data$Earning_level) / nrow(train_data)
+
+# Testing accuracy for Naive Bayes
+test_bayes_acc <- bayes_conf_matrix$overall["Accuracy"]
+
+# Hyperparameter tuning for Decision Tree
+#tree_grid <- expand.grid(cp = seq(0.001, 0.05, by = 0.001))
+#tree_train_control <- trainControl(method = "cv", number = 5)
+#tree_tuned <- train(Earning_level ~ ., data = train_data, method = "rpart", 
+ #                   trControl = tree_train_control, tuneGrid = tree_grid)
+#print(tree_tuned$bestTune)
+
+# Hyperparameter tuning for Naive Bayes
+#bayes_grid <- expand.grid(fL = seq(0, 1, by = 0.1), 
+ #                         usekernel = c(TRUE, FALSE), 
+  #                        adjust = seq(0.5, 2, by = 0.1))
+#bayes_train_control <- trainControl(method = "cv", number = 5)
+#bayes_tuned <- train(Earning_level ~ ., data = train_data, method = "nb", 
+ #                    trControl = bayes_train_control, tuneGrid = bayes_grid)
+#print(bayes_tuned$bestTune)
+
+
+# Metrics for Decision Tree
+tree_metrics <- tree_conf_matrix$byClass
+print(c(Accuracy = test_tree_acc,
+        tree_metrics[c("Precision", "Recall", "Sensitivity", "Specificity")]))
+
+# Metrics for Naive Bayes
+bayes_metrics <- bayes_conf_matrix$byClass
+print(c(Accuracy = test_bayes_acc,
+        bayes_metrics[c("Precision", "Recall", "Sensitivity", "Specificity")]))
+
+# Load the necessary library
+library(pROC)
+
+# Compute the ROC for Decision Tree
+tree_prob <- predict(decision_tree, test_data, type = "prob")[,2]
+roc_tree <- roc(test_data$Earning_level, tree_prob)
+
+# Plotting the ROC
+plot(roc_tree, main = "ROC Curve for Decision Tree", 
+     col = "blue", lwd = 2, 
+     ylim = c(0, 1.1), 
+     auc.polygon = TRUE, col.auc = "lightblue", grid = TRUE,
+     print.auc = TRUE, print.auc.y = 1.05)
+
+
+# Adding train and test accuracy lines
+abline(h = train_tree_acc, col = "darkgreen", lty = 2, lwd = 2)
+abline(h = test_tree_acc, col = "darkred", lty = 2, lwd = 2)
+
+# Adding legends and text for better clarity
+legend("bottomright", 
+       legend = c(paste("Train Acc:", round(train_tree_acc, 2)),
+                  paste("Test Acc:", round(test_tree_acc, 2))),
+       fill = c("darkgreen", "darkred"), title = "Accuracy", bty = "n")
+
+# Load the necessary library
+library(pROC)
+
+# Compute the ROC for Naive Bayes
+bayes_prob <- predict(naive_bayes, test_data, type = "raw")[,2]
+roc_bayes <- roc(test_data$Earning_level, bayes_prob)
+
+# Plotting the ROC
+plot(roc_bayes, main = "ROC Curve for Naive Bayes", 
+     col = "red", lwd = 2, 
+     ylim = c(0, 1.1), 
+     auc.polygon = TRUE, col.auc = "pink", grid = TRUE,
+     print.auc = TRUE, print.auc.y = 1.05)
+
+# Adding train and test accuracy lines
+abline(h = train_bayes_acc, col = "darkgreen", lty = 2, lwd = 2)#(OpenAI, 2023)
+abline(h = test_bayes_acc, col = "darkred", lty = 2, lwd = 2)
+
+# Adding legends and text for better clarity
+legend("bottomright", 
+       legend = c(paste("Train Acc:", round(train_bayes_acc, 2)),
+                  paste("Test Acc:", round(test_bayes_acc, 2))),
+       fill = c("darkgreen", "darkred"), title = "Accuracy", bty = "n")
+```
+
+***Data observation:*** The first model performs exceptionally well with an accuracy of 99.41%. With a sensitivity of 98.55% and specificity of 100% it predicts both "High" and "Low" earning levels reliably.
+
+The second model though with a good accuracy of 88.17% has room for improvement especially when predicting "High" earners.
+
+From a business perspective:
+
+Accuracy is pivotal. An inaccurate model could lead businesses to target the wrong audience or misallocate resources.Sensitivity (Recall) is key. If you're marketing a luxury product missing out on the "High" earners can be a costly mistake.Specificity ensures you're not targeting those who might not afford or be interested in premium offerings.Precision ensures the efficiency of the model. If precision is low businesses might end up wasting resources targeting those who are less likely to convert.Given these insights a company must select the model that aligns with their strategic goals. If maximizing reach among high earners is essential sensitivity becomes crucial. If efficient allocation of resources is a priority precision should be considered.
+
+In summary when deciding between these models businesses must weigh the trade-offs of each metric in light of their marketing and financial objectives.
+
+
+# Approach 2:
+
+Currently we're zeroing in on established YouTubers to gauge their guaranteed earning potential emphasizing metrics like subscribers and views as well as their content categories. The entertainment sector in particular emerges as a promising arena for YouTube creators.
+
+## Part 1 - Classification Choosing the response (target) variable Combination 2:
+
+We are in the process of identifying a set of potential predictor columns alongside the target column. Our aim is to scrutinize a diverse range of variables to determine if any have been influenced by the event in question.
+
+Firstly a set of candidate columns — "subscribers", "video_views", "category", "uploads", "Country", "created_year", "created_month", and 'Earning_level' — is identified based on domain expertise and the analysis's goals. Next the 'youtube_data' dataset is pruned to only retain these selected columns. After pruning the columns in the updated dataset are printed to verify the modifications. Lastly for the binary target variable 'Earning_level' a specific label "High", is defined as the positive class. This step is essential for clarity during subsequent analysis or modeling stages especially in binary classification tasks where distinguishing between positive and negative outcomes is vital.
+
+## Exlpaination for Domain specific assumptions for selection of Combination 2:
+
+YouTube one of the world's most popular video-sharing platforms has a revenue model that is deeply rooted in advertising. At the heart of this model businesses and enterprises pay YouTube to display their advertisements on channels that belong to popular You Tubers and influencers. These channels typically have a significant following and are capable of generating a large number of video views.
+
+The rationale behind this strategy is simple: videos that garner a higher number of views offer a broader audience reach. By placing ads on these high-view videos advertisers can ensure maximum visibility for their products or services. Popular You Tubers and influencers due to their significant fan base can provide a lucrative platform for these ads making them ideal partners for YouTube's advertising endeavors.
+
+In essence YouTube acts as a bridge connecting advertisers with influential content creators ensuring that advertisements reach a vast and engaged audience thus optimizing the return on advertising investment for businesses.
+
+So hence the number of views a video receives is directly proportional to the likelihood of it hosting more advertisements. Consequently an increase in ads can lead to heightened revenue elevating the content creator's earnings.
+
+Subscribers provide a stable foundation for viewership. Channels with a large subscriber base can expect a more predictable stream of views every time they release new content.
+
+The frequency with which a content creator uploads videos also has a profound impact on their success. Maintaining a consistent upload schedule can significantly enhance a channel's visibility and reach.
+
+The appeal of content often varies based on geographical and cultural nuances. While a comedic segment might be a hit in one region it might fall flat in another due to cultural differences in humor and entertainment preferences.
+
+Based on our exploratory data analysis (EDA) it's evident that 'entertainment' stands out as the most dominant category on YouTube. This prominence indicates that the genre or category of content is a pivotal factor in a channel's success trajectory.
+
+Analyzing the specific times a channel witnesses a spike in growth or popularity can be informative. By tracking content release patterns by year and month one can glean valuable insights into viewer consumption habits.
+
+Armed with these revelations we've meticulously selected particular columns for our data set. This selection aims to provide a holistic perspective on the elements that drive success on the YouTube platform.
+```{r,warning=FALSE, message=FALSE}
+
+# Section: Feature Selection and Dataset Pruning
+# This section focuses on selecting the candidate columns that will be used in further analysis or modeling.
+# The selected columns are believed to have a potential impact on the target variable 'Earning_level'.
+
+# Step 1: Defining Candidate Columns
+# A vector 'candidate.columns' is created to hold the names of the columns that will be retained in the dataset.
+candidate.columns <- c("subscribers", "video_views", "category", "uploads", "Country", 
+                       "created_year", "created_month", 'Earning_level')
+
+# Note:
+# The columns are selected based on domain knowledge, data understanding, and the objective of the analysis.
+
+# Step 2: Dataset Pruning
+
+# The dataset 'youtube_data' is pruned to only include the candidate columns defined in the previous step.
+youtube_data <- youtube_data[, candidate.columns]#(OpenAI, 2023)
+
+# Print Column Names
+# Printing the names of the columns in the pruned dataset to confirm the changes.
+names(youtube_data)
+
+# Step 3: Defining Positive Class Label
+# The variable 'pos' is defined to hold the label of the positive class ('High') in the binary target variable 'Earning_level'.
+pos <- "High"
+
+# Note:
+# Defining the positive class label is useful for reference in later stages of analysis or modeling,
+# especially in binary classification tasks where understanding the positive and negative classes is crucial.
+```
+
+## Data Splitting:
+
+In the specified section titled "Data Splitting " the 'youtube_data' dataset undergoes a series of processing steps to prepare it for predictive modeling. Initially a seed is set to guarantee consistent random number generation ensuring that the data-splitting process remains reproducible across runs. The outcome variable is identified as 'Earning_level' for convenient referencing.
+
+For ease of manipulation and to maintain data integrity a copy of the 'youtube_data' dataset, named 'd', is created. Within this copied dataset, a random group assignment variable, 'rgroup', is generated using the runif function. To maintain consistency the levels for categorical variables 'category' and 'Country' are standardized across all data.
+
+The data is then divided into training and test sets based on the random group assignment. A value of 0.7 is used as the threshold for this split meaning 70% of the data is designated for training purposes. However the test set consists of the remaining data beyond the initial 30%.
+
+Further within the code categorical and numerical variables are identified separately. This distinction helps in understanding the nature of data and assists in subsequent data analysis processes.
+
+Lastly the training data 'dTrainAll', undergoes another split. It's segmented into a primary training set 'dTrain' and a validation (or calibration) set 'dCal'. This division uses a binary random number generation process ensuring that approximately 30% of the 'dTrainAll' data is used for calibration.
+
+In essence this comprehensive data splitting process is pivotal for predictive modeling. It ensures that the model undergoes rigorous training validation and testing which is vital for assessing its accuracy and robustness.
+```{r,warning=FALSE, message=FALSE}
+# Section: Data Splitting
+# This section is dedicated to splitting the 'youtube_data' dataset into training, validation (calibration), and test sets
+# for the purpose of developing and evaluating a predictive model.
+
+# Step 1: Set Seed for Reproducibility
+# Setting a seed ensures that the random number generation process is reproducible.
+set.seed(735)
+
+# Step 2: Define Outcome Variable
+# Defining the name of the outcome variable for easy reference throughout the code.
+outcome <- 'Earning_level'
+
+# Step 3: Prepare Dataset
+# Creating a copy of 'youtube_data' named 'd' to work with, ensuring original data remains unchanged.
+d <- youtube_data
+
+# Step 4: Generate Random Group Assignment
+# Generating a random group assignment variable 'rgroup' using runif function.
+d$rgroup <- runif(dim(d)[1])
+
+# Step 5: Standardize Factor Levels
+# Ensuring all data have the same levels for the categorical variables 'category' and 'Country'.
+d$category <- factor(d$category, levels = unique(d$category))
+d$Country <- factor(d$Country, levels = unique(d$Country))
+
+# Step 6: Create Training and Test Sets
+# Splitting the data into training and test sets based on the random group assignment.
+dTrainAll <- subset(d, rgroup <= 0.7)#(OpenAI, 2023)
+dTest <- subset(d, rgroup > 0.3)
+
+# Step 7: Identify Variable Types
+# Identifying the names of categorical and numerical variables in the dataset.
+vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
+catVars <- vars[sapply(dTrainAll[, vars], class) %in% c('factor', 'character')]
+numericVars <- vars[sapply(dTrainAll[, vars], class) %in% c('numeric', 'integer')]
+
+# Step 8: Split dTrainAll into Training and Validation (Calibration) Sets
+# Randomly splitting 'dTrainAll' into a training set 'dTrain' and a validation (calibration) set 'dCal'.
+useForCal <- rbinom(n = dim(dTrainAll)[1], size = 1, prob = 0.3) > 0
+dCal <- subset(dTrainAll, useForCal)
+dTrain <- subset(dTrainAll, !useForCal)
+
+# Note:
+# The data splitting process is crucial for developing a robust predictive model.
+# It ensures that the model can be trained on one set of data, validated on another, and tested on a third set to evaluate its performance.
+```
+
+## Single variable model:
+
+In the "Predictive Feature Engineering" section the focus is on converting categorical variables into predictive features for modeling. This is achieved by determining predictive probabilities for each categorical level using their association with the 'Earning_level' outcome.
+
+The custom function mkPredC calculates these probabilities. It considers three parameters: the target column (outCol) the categorical column in question (varCol), and the application column (appCol). Inside it determines the overall likelihood of the positive class tabulates missing categorical data and counts the target variable against each categorical level. Probabilities are then derived for every categorical level and missing data.
+
+The positive class is labeled as 'High' with a variable pos. Subsequently the mkPredC function is run for all categorical variables listed in catVars. It assigns predictive probabilities to newly constructed columns prefixed with 'pred' across the training calibration and test data sets.
+
+In essence this technique refines the data set with pivotal information in the form of predictive probabilities setting a solid groundwork for subsequent modeling endeavors.
+
+```{r,warning=FALSE, message=FALSE}
+# Section: Predictive Feature Engineering
+# This section focuses on creating predictive features using categorical variables. 
+# The function mkPredC computes predictive probabilities for each level of a categorical variable.
+
+# Step 1: Define Function mkPredC
+# The function takes three arguments: 
+# - outCol: the target variable column,
+# - varCol: the categorical variable column, and
+# - appCol: the application column (where predictions will be applied).
+mkPredC <- function(outCol, varCol, appCol) {
+  
+  # pPos computes the overall probability of the positive class in the target variable.
+  pPos <- sum(outCol == pos) / length(outCol)
+  
+  # naTab creates a table of counts for each class in the target variable, 
+  # for rows where the categorical variable is missing.
+  naTab <- table(as.factor(outCol[is.na(varCol)]))
+  
+  # pPosWna computes the probability of the positive class when the categorical variable is missing.
+  pPosWna <- (naTab/sum(naTab))[pos]
+  
+  # vTab creates a contingency table of counts for each class in the target variable
+  # against each level of the categorical variable.
+  vTab <- table(as.factor(outCol), varCol)
+  
+  # pPosWv computes the probability of the positive class for each level of the categorical variable.
+  pPosWv <- (vTab[pos, ] + 1.0e-3*pPos) / (colSums(vTab) + 1.0e-3)
+  
+  # pred initializes the prediction vector with the computed probabilities for each level of the categorical variable.
+  pred <- pPosWv[appCol]
+  
+  # For rows where the categorical variable is missing, replace the prediction with the probability of the positive class when the categorical variable is missing.
+  pred[is.na(appCol)] <- pPosWna
+  
+  # For rows where the prediction is still missing (e.g., due to unseen levels), replace the prediction with the overall probability of the positive class.
+  pred[is.na(pred)] <- pPos
+  
+  return(pred)
+}
+
+# Step 2: Set Positive Class Label#(OpenAI, 2023)
+# Setting the label of the positive class for reference in the mkPredC function.
+pos <- 'High'
+
+# Step 3: Apply mkPredC Function to Categorical Variables
+# Looping through each categorical variable to compute predictive features, and storing these features in new columns in the training, validation (calibration), and test datasets.
+for(v in catVars) {
+  # Constructing the name of the new predictive feature column.
+  pi <- paste('pred', v, sep='')
+  
+  # Applying the mkPredC function to the training, validation (calibration), and test datasets.
+  dTrain[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTrain[,v])
+  dCal[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dCal[,v])
+  dTest[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTest[,v])
+}
+
+# Note:
+# The mkPredC function computes predictive probabilities using the relative frequencies of the positive class
+# for each level of a categorical variable. These predictive features can be useful for developing predictive models.
+```
+
+## Processing the numerical variables:
+
+In predictive modeling while numerical variables are powerful their continuous nature can hinder the understanding of non-linear relationships with target variables. This issue is addressed by transforming these variables into categorical ones. The provided code bins numerical variables into deciles computing predictive probabilities thereafter.
+
+Why this transformation? Binning captures non-linear patterns making some modeling techniques more efficient. Categorical especially binned data enhances interpretation visualization and communication. Moreover binning addresses outliers by categorizing extreme values into the highest or lowest bins and reduces overfitting risks especially when numeric variables have many unique values.
+
+The code uses the mkPredN function to facilitate this. It takes the target variable (outCol) a numeric variable (varCol) and a prediction application column (appCol). Inside it calculates deciles using the quantile function categorizes values into these deciles and employs the mkPredC function (not shown) to compute predictive probabilities.
+
+For broader application the code runs through all variables in numericVars. It generates a new feature name with a 'pred' prefix for clarity and uses mkPredN to bin and compute predictive probabilities. Results populate training validation and test data sets.
+
+In conclusion binning numeric variables into deciles followed by predictive probability calculation augments predictive modeling. This method identifies nuanced relationships in data refining the overall modeling process.
+
+```{r,warning=FALSE, message=FALSE}
+# Section: Predictive Feature Engineering for Numeric Variables
+# This section focuses on creating predictive features from numeric variables by binning them into deciles,
+# then computing predictive probabilities within each bin.
+
+# Step 1: Define Function mkPredN
+# The function takes three arguments: 
+# - outCol: the target variable column,
+# - varCol: the numeric variable column, and
+# - appCol: the application column (where predictions will be applied).
+mkPredN <- function(outCol, varCol, appCol) {
+  
+  # Compute decile cut points from varCol, removing any NA values for the quantile calculation.
+  # This creates 10 bins based on the distribution of varCol.
+  cuts <- unique(as.numeric(
+    quantile(varCol, probs = seq(0, 1, 0.1), na.rm = TRUE)
+  ))
+  
+  # Bin varCol and appCol using the cut points from above.
+  # This converts the numeric columns to categorical bins.
+  varC <- cut(varCol, cuts)
+  appC <- cut(appCol, cuts)
+  
+  # Call mkPredC function defined previously to compute predictive probabilities for each bin.
+  # This re-uses the logic from mkPredC to now handle binned numeric variables.
+  return(mkPredC(outCol, varC, appC))
+}
+
+# Step 2: Apply mkPredN Function to Numeric Variables
+# Loop through each numeric variable to compute predictive features based on binned values.
+# Store these features in new columns in the training, validation (calibration), and test datasets.
+for (v in numericVars) {
+  
+  # Constructing the name of the new predictive feature column.
+  pi <- paste('pred', v, sep = '')#(OpenAI, 2023)
+  
+  # Applying the mkPredN function to the training, validation (calibration), and test datasets.
+  dTrain[, pi] <- mkPredN(dTrain[, outcome], dTrain[, v], dTrain[, v])
+  dTest[, pi] <- mkPredN(dTrain[, outcome], dTrain[, v], dTest[, v])
+  dCal[, pi] <- mkPredN(dTrain[, outcome], dTrain[, v], dCal[, v])
+}
+
+# Note:
+# The mkPredN function extends the logic of mkPredC to handle numeric variables.
+# By binning the numeric variables into deciles, we can apply the predictive probability computation
+# logic from mkPredC to these binned numeric variables.
+```
+
+## Defining functions: calcAUC , logLikelihood :
+
+The code introduces two functions calcAUC and logLikelihood, to evaluate a predictive model's performance. The calcAUC function determines the Area Under the Curve (AUC) using the performance function from the ROCR package aiding in understanding classification efficacy. On the other hand logLikelihood calculates the log-likelihood assessing the alignment of predicted probabilities with actual outcomes. An epsilon is included to prevent undefined log(0) computations. These functions are essential for model evaluation with AUC offering binary classification insights and log-likelihood showcasing model fit.
+
+```{r,warning=FALSE, message=FALSE}
+# Section: Performance Metrics Calculation
+# In this section, two functions are defined to compute the Area Under the Curve (AUC) and the Log-Likelihood metrics,
+# which are crucial for evaluating the predictive model's performance.
+
+# Function: calcAUC
+# This function computes the Area Under the Curve (AUC) of the Receiver Operating Characteristic (ROC) curve,
+# which is a valuable metric for evaluating the classification performance.
+calcAUC <- function(predcol, outcol) {
+  # Utilizing the 'performance' function from the ROCR package to compute the AUC.
+  perf <- performance(prediction(predcol, outcol == pos), 'auc')#(OpenAI, 2023)
+  
+  # Extracting the AUC value from the performance object and converting it to a numeric value.
+  return(as.numeric(perf@y.values, na.rm = TRUE))
+}
+
+# Function: logLikelihood
+# This function computes the log-likelihood of the observed data given the predicted probabilities,
+# which is a measure of how well the predicted probabilities align with the actual outcomes.
+logLikelihood <- function(ytrue, ypred, epsilon = 1e-6) {
+  # Computing the log-likelihood:
+  # - For positive class (ytrue == pos), it computes log of predicted probabilities.
+  # - For negative class (ytrue != pos), it computes log of (1 - predicted probabilities).
+  # An epsilon value is added to the predicted probabilities to avoid log(0) which is undefined.
+  return(sum(ifelse(ytrue == pos, log(ypred + epsilon), log(1 - ypred - epsilon))))
+}
+
+# Note:
+# 1. The calcAUC function utilizes the ROCR package to compute the AUC, which is a common metric for evaluating
+#    the performance of binary classification models.
+# 2. The logLikelihood function computes the log-likelihood of the observed data given the predicted probabilities,
+#    which is an important metric for understanding the model's goodness of fit to the data.
+# 3. An epsilon value is added to avoid log(0) computations in logLikelihood function, which would result in undefined values.
+```
+
+## Compute the log likelihood of the svm model:
+
+Leveraging the log-likelihood (or its deviance) from the svm model can guide us in pinpointing top-performing categorical and numerical variables. Within this framework the svm model is the baseline the most rudimentary model designed to forecast the outcome variable. It operates under the premise that earning levels are influenced solely by prior probabilities or overarching class distributions disregarding any predictor variables. In essence the svm model posits an absence of correlation between predictors and earning levels.
+
+```{r,warning=FALSE, message=FALSE}
+
+logNull <- logLikelihood(
+  dCal[, outcome],  # Actual outcomes
+  sum(dCal[, outcome] == pos) / nrow(dCal)#(OpenAI, 2023)
+)
+
+
+cat("The log likelihood of the svm model is:", logNull, "\n")
+```
+
+## Selecting the top performing variables Log likehood of svm 
+
+selecting the most impactful categorical variables based on their ability to reduce deviance compared to a SVM model thus enhancing the model's fit. By setting a minimum threshold for deviance reduction the code iteratively assesses each categorical variable's contribution and retains those that meet or exceed this threshold.
+
+```{r,warning=FALSE, message=FALSE}
+# Section: Selecting Top-Performing Categorical Variables
+# This section is dedicated to identifying the categorical variables that significantly reduce the deviance
+# compared to the null model. The reduction in deviance is a measure of how much the variable improves the model fit.
+
+# Initialize an empty vector to store the names of the top-performing categorical variables
+selCatVars <- c()
+
+# Define a minimum threshold for deviance reduction. Only variables that reduce the deviance by at least this amount will be selected.
+minDrop <- 1
+
+# Iterate through each categorical variable to evaluate its performance
+for (v in catVars) {
+  
+  # Create a name for the predicted column
+  pi <- paste('pred', v, sep='')
+  
+  # Calculate the deviance reduction achieved by including the current variable
+  # This is done by comparing the log-likelihood of a model with the variable to the log-likelihood of the SVM model
+  devDrop <- 2 * (logLikelihood(dCal[, outcome], dCal[, pi]) - logNull)
+  
+  # If the deviance reduction is greater than or equal to the minimum threshold, select the variable
+  if (devDrop >= minDrop) {
+    
+    # Print the variable name and the amount of deviance reduction it achieved
+    print(sprintf("%s, deviance reduction: %g", pi, devDrop))#(OpenAI, 2023)
+    
+    # Add the variable to the list of selected variables
+    selCatVars <- c(selCatVars, pi)
+  }
+}
+
+# Note:
+# 1. The deviance reduction is calculated as twice the difference in log-likelihood between the model with the current variable and the null model.
+# 2. A higher deviance reduction indicates a better performance of the variable in improving the model fit.
+# 3. The selected variables are stored in selCatVars for further analysis.
+
+```
+## Run through numerical variables to select top performers:
+
+This code aims to identify and select the top-performing numerical variables based on their deviance reduction compared to a single variable model.
+
+```{r,warning=FALSE, message=FALSE}
+# Section: Selecting Top-Performing Numerical Variables
+# This section iterates through the numerical variables, evaluating the reduction in deviance they bring to the model compared to the single variable model.
+# The top-performing variables are stored for further analysis.
+
+# Initialize an empty vector to store the names of the top-performing numerical variables
+selNumVars <- c()
+
+# Set a minimum threshold for deviance reduction. Only variables that reduce the deviance by at least this amount will be selected.
+minDrop <- 1  
+
+# Loop through each numerical variable to evaluate its performance
+for (v in numericVars) {
+  
+  # Construct the name of the predicted column for the current variable
+  pi <- paste('pred', v, sep='')
+  
+  # Calculate the log-likelihood for the current variable
+  devCal <- logLikelihood(dCal[, outcome], dCal[, pi])
+  
+  # Ensure the log-likelihood is a valid number (not NA) before proceeding
+  if (!is.na(devCal)) {
+    
+    # Calculate the reduction in deviance achieved by the current variable compared to the null model
+    devDrop <- 2 * (devCal - logNull)
+    
+    # If the reduction in deviance is significant (i.e., greater or equal to minDrop), select the variable
+    if (devDrop >= minDrop) {#(OpenAI, 2023)
+      
+      # Print the variable name and the amount of deviance reduction it achieved
+      print(sprintf("%s, deviance reduction: %g", pi, devDrop))
+      
+      # Add the variable to the list of selected variables
+      selNumVars <- c(selNumVars, pi)
+    }
+  }
+}
+
+# Note:
+# 1. The loop iterates through each numerical variable, calculating the log-likelihood and the reduction in deviance compared to the null model.
+# 2. A check is performed to ensure the log-likelihood is not NA before calculating the deviance reduction.
+# 3. Variables that significantly reduce the deviance (as specified by minDrop) are selected and added to selNumVars for further analysis.
+
+```
+
+Combine the two vectors of top performers
+The purpose of this code is to combine the vectors of top-performing categorical and numerical variables and assess their performance on the test set.
+
+## Viewing the categorical
+```{r,warning=FALSE, message=FALSE}
+selCatVars
+```
+## Viewing the numerical 
+```{r,warning=FALSE, message=FALSE}
+selNumVars
+```
+
+The performance of the previously identified top-performing categorical and numerical variables on a test data set. The evaluation metric used is the Area Under the Curve (AUC). After combining the top-performing variables from both categories, the code calculates the AUC for each variable on the test set and then prints out the results. For instance, the variable "Country" achieved an AUC of 0.880139 on the test set suggesting a strong predictive power. Similarly "uploads" and "created_year" achieved AUC values of 0.656582 and 0.628586 respectively.
+```{r}
+# Section: Evaluating Performance of Top-Performing Variables on the Test Set
+# In this section, we evaluate the performance of the top-performing categorical and numerical variables on the test set
+# using Area Under the Curve (AUC) as the metric.
+
+# Combine the selected categorical and numerical variables into a single vector for evaluation
+selVars <- c(selCatVars, selNumVars)
+
+# Print a header for this section of output
+cat("Performance of the top performing single variables on the test set:\n")
+
+# Iterate through each selected variable to calculate and print its AUC on the test set
+for (v in selVars) {
+  
+  # Extract the original variable name from the predicted variable name (e.g., 'predVariableName' to 'VariableName')
+  orig_v <- substring(v, 5)
+  
+  # Calculate the AUC of the current variable on the test set
+  auc_value <- calcAUC(dTest[,v], dTest[,outcome])#(OpenAI, 2023)
+  
+  # Print the original variable name and its AUC value
+  cat(sprintf("Variable %6s: AUC = %g\n", orig_v, auc_value))
+}
+
+# Note:
+# 1. The selected variables from both categorical and numerical groups are combined into 'selVars' for evaluation.
+# 2. We iterate through each variable in 'selVars', calculating its AUC on the test set using the 'calcAUC' function.
+# 3. The original variable name is extracted from the predicted variable name using the 'substring' function.
+# 4. The results are printed to the console, showing the AUC value for each top-performing variable on the test set.
+```
+
+Density plots that vividly depict the distribution patterns of quantitative metrics specifically 'uploads', 'video views over the past 30 days', and 'subscribers gained in the last 30 days', segmented by distinct "Earning_level" categories. By visualizing these distributions we can gain deeper insights into how these metrics influence or correlate with different earning levels.
+```{r,warning=FALSE, message=FALSE}
+# Load necessary library
+library(ggplot2)
+
+# Section: Frequency Plots for Predictive Variables by Earning_level
+# Purpose: To visualize the distribution of predictive variables 'predCountry' and 'preduploads' 
+# split by 'Earning_level' using density plots.
+
+# Density Plot for 'predCountry' by 'Earning_level'
+# - Using the 'dCal' dataset, a density plot is generated to visualize the distribution of the 'predCountry' variable.
+# - The 'color' aesthetic is mapped to the 'Earning_level' factor to differentiate the distributions.
+ggplot(data = dCal) +
+  geom_density(aes(x = predCountry, color = as.factor(Earning_level)),
+               alpha = 0.7, adjust = 1.5) +  # Adjust line smoothness and transparency for better visualization
+  labs(
+    title = "Density Plot of 'predCountry' by Earning_level",
+    x = "Predictive Score (predCountry)",
+    color = "Earning Level"
+  ) +
+  theme_minimal()  # Apply a minimal theme for a cleaner appearance
+
+# Density Plot for 'preduploads' by 'Earning_level'
+# - Similarly, a density plot is generated for the 'preduploads' variable.
+# - The 'color' aesthetic is again mapped to the 'Earning_level' factor.
+ggplot(data = dCal) +
+  geom_density(aes(x = preduploads, color = as.factor(Earning_level)),#(OpenAI, 2023)
+               alpha = 0.7, adjust = 1.5) +  # Adjust line smoothness and transparency
+  labs(
+    title = "Density Plot of 'preduploads' by Earning_level",
+    x = "Predictive Score (preduploads)",
+    color = "Earning Level"
+  ) +
+  theme_minimal()  # Apply a minimal theme
+
+# Note:
+# 1. The 'geom_density()' function from the 'ggplot2' package is used to create density plots.
+# 2. The 'aes()' function is used to map the 'x' and 'color' aesthetics to the respective variables.
+# 3. The 'labs()' function is used to add titles and labels to the plots for better interpretation.
+# 4. The 'theme_minimal()' function is used to apply a minimal theme for a cleaner plot appearance.
+# 5. The 'alpha' and 'adjust' parameters in 'geom_density()' are used to control transparency and line smoothness.
+```
+
+
+## Multivariable model:
+## Decision Tree with all variables
+
+A multivariate decision tree model is constructed by utilizing a curated set of variables. The model is designed to offer insights into the relationships between the outcome and the predictor variables with the aim of enhancing prediction accuracy.
+
+Initially the code identifies the appropriate features by stripping off the "pred" prefix from the selVars list which gives us the original names of the variables. Armed with these feature names a model formula is assembled. This formula defines the connection between the outcome variable and the chosen predictors acting as a blueprint for the model-building process.
+
+With the formula in hand the rpart function is employed to build the decision tree model. The function constructs the model based on the training data dTrain with the method specified as "class" signaling that the problem at hand is one of classification. Though the code contains lines to compute the Area Under the Curve (AUC) for both training and testing data these are currently commented out and won't execute.
+
+Once the model is ready predictions are made on the testing data using the predict function. This function yields class predictions which are then matched against actual labels creating a confusion matrix. This matrix becomes the foundation for deriving essential model performance metrics.
+
+In terms of performance evaluation four key metrics are computed: Accuracy, Precision, Recall, and F1-Score. These metrics provide a comprehensive view of the model's effectiveness. Accuracy offers a general overview capturing the proportion of correctly classified instances. Precision zeroes in on the true positive predictions out of all positive predictions while Recall reveals the proportion of actual positives that were rightly predicted. F1-Score a harmonized measure, encapsulates both Precision and Recall, serving as a balanced evaluator.
+```{r}
+
+features <- sub("pred", "", selVars)
+# Section: Building and Evaluating the Classification Tree Model
+# Purpose: To build a classification tree model using selected variables and evaluate its performance.
+
+# Formula Construction
+# - Constructing a formula for the model using the selected variables.
+fV <- paste(outcome,' ~ ',paste(features, collapse=' + '),sep='')
+
+# Building the Classification Tree Model
+# - Using the 'rpart' function to build a classification tree model on the training data 'dTrain'.
+# - The 'class' method is specified to indicate a classification problem.
+tmodel <- rpart(fV, data=dTrain, method = "class")
+
+# Uncomment below lines to calculate AUC on Training and Testing data
+# print(calcAUC(predict(tmodel, newdata=dTrain), dTrain[,outcome]))
+# print(calcAUC(predict(tmodel, newdata=dTest), dTest[,outcome]))
+
+# Model Prediction on Testing Data
+# - Using the 'predict' function to make class predictions on the testing data 'dTest'.
+prediction_class <- predict(tmodel, dTest, type = "class")#(OpenAI, 2023)
+
+# Confusion Matrix Calculation
+# - Constructing a confusion matrix to compare the actual and predicted class labels.
+cmat <- table(actual = prediction_class, predicted = dTest$Earning_level)
+
+# Model Performance Metrics Calculation
+# - Calculating accuracy, precision, recall, and F1-score to evaluate the model's performance.
+
+# Accuracy: The proportion of correctly classified instances.
+(accuracy <- sum(diag(cmat)) / sum(cmat))
+
+# Precision: The proportion of true positive predictions among all positive predictions.
+(precision <- cmat[2, 2] / sum(cmat[, 2]))
+
+# Recall: The proportion of true positive predictions among all actual positives.
+(recall <- cmat[2, 2] / sum(cmat[2, ]))
+
+# F1-Score: The harmonic mean of precision and recall, a balanced measure of precision and recall.
+(f1 <- 2 * precision * recall / (precision + recall))
+
+# Note:
+# 1. The 'rpart' function from the 'rpart' package is used to build the classification tree model.
+# 2. The 'predict' function is used to make class predictions on new data.
+# 3. The 'table' function is used to construct a confusion matrix for evaluating model performance.
+# 4. Accuracy, precision, recall, and F1-score are common metrics for evaluating classification models.
+
+```
+The model demonstrates a high level of precision (92.13%) indicating it's reliable in its positive predictions with few false positives. Its recall of 87% shows it captures most positive instances but there's room for improvement. The accuracy suggests an overall correct prediction rate of 87.40% across classes. The F1 score, close to 0.9, indicates a well-balanced trade-off between precision and recall especially important if there's class imbalance. 
+
+## Plotting the AUC:
+The purpose of this code is to plot Receiver Operating Characteristic (ROC) curves to visualize the performance of a machine learning model. 
+```{r}
+# Load necessary library
+library(ROCit)
+
+# Function: plot_roc
+# Purpose: This function plots the ROC curve for both training and testing datasets.
+# Parameters:
+# - predcol1, outcol1: Predicted scores and true outcomes for the first dataset (e.g., test dataset).
+# - predcol2, outcol2: Predicted scores and true outcomes for the second dataset (e.g., training dataset).
+plot_roc <- function(predcol1, outcol1, predcol2, outcol2) {
+  
+  # ROC Calculation:
+  # - Using the 'rocit' function to calculate the true positive rate (TPR) and false positive rate (FPR).
+  roc_1 <- rocit(score = predcol1, class = outcol1 == pos)
+  roc_2 <- rocit(score = predcol2, class = outcol2 == pos)
+  
+  # ROC Plotting:
+  # - Using the 'plot' function to plot the ROC curve for the first dataset.
+  # - Using the 'lines' function to plot the ROC curve for the second dataset on the same plot.
+  plot(roc_1, col = c("blue", "green"), lwd = 3,
+       legend = FALSE, YIndex = FALSE, values = TRUE, asp = 1)
+  lines(roc_2$TPR ~ roc_2$FPR, lwd = 3,
+        col = c("red", "green"), asp = 1)
+  
+  # Legend Addition:
+  # - Adding a legend to the plot to identify the ROC curves for training and testing datasets.
+  legend("bottomright", col = c("blue", "red", "green"),
+         c("Test Data", "Training Data", "Null Model"), lwd = 2)#(OpenAI, 2023)
+}
+
+# Model Prediction for ROC:
+# - Obtaining predicted scores for both training and testing datasets using the 'predict' function.
+pred_test_roc <- predict(tmodel, newdata = dTest)[, 1]
+pred_train_roc <- predict(tmodel, newdata = dTrain)[, 1]
+
+# ROC Plotting:
+# - Calling the 'plot_roc' function to plot the ROC curves for training and testing datasets.
+plot_roc(pred_test_roc, dTest[[outcome]],
+         pred_train_roc, dTrain[[outcome]])
+
+```
+
+## Visualising the decision tree:
+```{r}
+# Load necessary library for enhanced tree plotting
+library(rpart.plot)
+
+# Setting graphical parameters
+# The 'par' function is used to set graphical parameters.
+# 'cex' is a numerical value giving the amount by which plotting text and symbols should be scaled relative to the default.
+# 1 is the default value, and 1.5 means 50% enlargement.
+par(cex = 1.5)#(OpenAI, 2023)
+
+# Plotting the decision tree
+# The 'rpart.plot' function provides an enhanced visualization of decision trees produced by rpart.
+# 'tmodel' is the trained model object created by rpart.
+rpart.plot(tmodel)
+
+```
+
+## NaiveBayes
+
+The Naive Bayes algorithm is a probabilistic classification method that utilizes Bayes' theorem assuming strong (naive) independence between features.
+
+For starters the code sets a seed to ensure the reproducibility of random operations. This step is vital to maintain consistent results across multiple runs. Following this the data set is partitioned into two subsets: a training set and a calibration set. About 75% of the data is randomly allocated to the training set with the remainder going to the calibration set.
+
+With the data suitably partitioned the naive Bayes function is employed to construct the model using the training data. Here the feature matrix is denoted by 'train[,features]', and the target variable is represented by 'train[,outcome]'.
+
+Once the model has been built predictions are made on the calibration set using the predict function. The model's performance is then assessed by comparing its predictions against the actual outcomes in the calibration set resulting in a confusion matrix. From this matrix essential classification metrics such as Accuracy, Precision, Recall, and F1-Score are calculated to provide a comprehensive understanding of the model's effectiveness.
+
+In the subsequent steps the code extracts probability scores intending to plot the Receiver Operating Characteristic (ROC) curve. This curve often used in binary classification portrays the true positive rate against the false positive rate. For the ROC plotting raw probabilities associated with the 'High' class label are fetched both for the training and calibration sets.
+
+```{r}
+# Set a seed for reproducibility of random operations
+set.seed(1323)
+
+# Create a logical vector to split the data into training and calibration sets
+intrain <- runif(nrow(youtube_data)) < 0.75
+train <- youtube_data[intrain,]
+calib <- youtube_data[!intrain,]
+
+# Build a Naive Bayes model using the training data
+# 'naiveBayes' function builds a Naive Bayes model, where:
+# - 'train[,features]' is the feature matrix for training,
+# - 'train[,outcome]' is the target variable for training.
+naivebayes_model <- naiveBayes(train[,features], train[,outcome])
+
+# Make predictions on the calibration data using the Naive Bayes model
+# 'predict' function is used to make predictions, where:
+# - 'naivebayes_model' is the trained model,
+# - 'calib' is the calibration data,
+# - 'type = "class"' specifies that the type of prediction should be class labels.
+prediction_naivebayes <- predict(naivebayes_model, calib, type = "class")
+
+# Create a confusion matrix to evaluate the model's performance
+cmat <- table(actual = prediction_naivebayes, predicted = calib$Earning_level)
+
+# Calculate and print evaluation metrics
+(accuracy <- sum(diag(cmat)) / sum(cmat))
+(precision <- cmat[2, 2] / sum(cmat[, 2]))#(OpenAI, 2023)
+(recall <- cmat[2, 2] / sum(cmat[2, ]))
+(f1 <- 2 * precision * recall / (precision + recall))
+
+# Obtain probability scores for ROC curve plotting
+# 'type = "raw"' specifies that the type of prediction should be raw probabilities.
+pred_test_roc <- predict(naivebayes_model, newdata=calib, type = "raw")[, "High"]
+pred_train_roc <- predict(naivebayes_model, newdata=train, type = "raw")[, "High"]
+
+# Use the previously defined 'plot_roc' function to plot ROC curves
+plot_roc(pred_test_roc, calib[[outcome]],
+         pred_train_roc, train[[outcome]])
+```
+***Data observation:*** High Precision: The model's precision is 0.9375 meaning when it predicts a positive outcome, it is correct 93.75% of the time. This indicates that the model is very reliable in its positive predictions and produces very few false positives.
+
+Moderate Recall: With a recall of 0.7741935 the model successfully identifies approximately 77.42% of all true positive instances. This also suggests that about 22.58% of positive instances might be missed by the model.
+
+Good Accuracy: An accuracy of 0.8027523 indicates that on the whole the model makes correct predictions (both positive and negative) about 80.28% of the time.
+
+Balanced F1 Score: The F1 score of 0.8480565 is a measure of the model's balance between precision and recall. The value close to 0.85 suggests that the model has achieved a reasonable trade-off between identifying positive instances and avoiding false positives.
+
+Precision-Recall Trade-off: The notably high precision coupled with a moderate recall suggests that while the model is cautious and precise in its positive predictions it might be slightly conservative missing out on some positive instances.
+
+Model Implication: Given its characteristics the Naive Bayes model is suitable for applications where high precision is desired and where the cost of false positives is high. However, in situations where capturing all positive instances is critical there might be a need to adjust the model or consider other models to boost recall.
+
+
+## Clustering
+
+## Hierarchical clustering:
+
+1. Preprocessing
+
+```{r}
+# Step 1: Data Preprocessing:
+library(ggplot2)
+library(tidyr)
+library(cluster)
+
+# Assuming youtube_data is your dataset
+# Remove categorical variables
+numeric_data <- youtube_data[sapply(youtube_data, is.numeric)]
+#(OpenAI, 2023)
+# Standardize/Normalize data
+scaled_data <- scale(numeric_data)
+```
+
+2. Compute the Distance Matrix
+To perform hierarchical clustering we'll need a distance (or dissimilarity) matrix. The dist() function can be used for this:
+```{r}
+# Step 2: Compute the Distance Matrix
+dist_matrix <- dist(scaled_data)#(OpenAI, 2023)
+```
+
+3. Perform Hierarchical Clustering
+The hclust() function can be used to perform the clustering:
+```{r}
+# Step 3: Perform Hierarchical Clustering
+hc_result <- hclust(dist_matrix, method="average")  # "average" linkage #(OpenAI, 2023)
+
+```
+
+4. Visualize the Dendrogram
+visualize the hierarchical clustering result using a dendrogram:
+```{r}
+# Step 4: Visualize the Dendrogram
+plot(hc_result, labels=FALSE, hang=-1, main="Hierarchical Clustering Dendrogram")#(OpenAI, 2023)
+```
+
+5. Cut the Dendrogram to Form a Specific Number of Clusters
+Cut the dendrogram to form a specific number of clusters using the cutree() function:
+
+```{r}
+# Step 5: Cut the Dendrogram to Form a Specific Number of Clusters
+k <- 3
+clusters <- cutree(hc_result, k)
+
+# Plot the dendrogram
+plot(hc_result, hang = -1) # 'hang' ensures labels hang from the horizontal line
+#(OpenAI, 2023)
+# Highlight clusters on the dendrogram
+rect.hclust(hc_result, k=k, border="red")
+```
+
+6. Analyze and Visualize the Clusters
+Just like with k-means,  use PCA to visualize the clusters in 2D:
+
+```{r}
+# Step 6: Analyze and Visualize the Clusters
+pca_result <- prcomp(scaled_data)
+pca_data <- data.frame(pca_result$x[, 1:2])#(OpenAI, 2023)
+pca_data$cluster <- factor(clusters)
+
+ggplot(pca_data, aes(x=PC1, y=PC2, color=cluster)) + geom_point()
+
+```
+
+Based on the dendrogram there are three distinct clusters with significant height differences indicating clear separations. The "average" linkage method appears to have effectively identified the groups. 
+
+
+7. Evaluate Clusters
+Compute the silhouette score for hierarchical clustering:
+```{r}
+# Step 7: Evaluate Clusters
+silhouette_score <- silhouette(clusters, dist_matrix)
+print(mean(silhouette_score[, 3]))
+
+# Visualize Cluster Distributions for Each Variable
+clustered_data <- as.data.frame(cbind(scaled_data, cluster=clusters))
+clustered_data_long <- gather(clustered_data, key="variable", value="value", -cluster)
+#(OpenAI, 2023)
+ggplot(clustered_data_long, aes(x=value, fill=cluster)) + 
+  geom_histogram(position="identity", alpha=0.5, bins=30) +
+  facet_wrap(~variable, scales="free_x") +
+  labs(title="Distribution of Variables by Cluster") +
+  theme_minimal()
+```
+
+A silhouette score close to 1 suggests well-separated clusters and a value of 0.7758859 indicates that the clusters in the hierarchical clustering are relatively well defined and distinct from each other. The value suggests a good clustering structure.
+
+```{r}
+# Bootstrapping to check the stability of clusters
+set.seed(123) # For reproducibility
+n_iterations <- 100
+boot_clusters <- list()
+
+for (i in 1:n_iterations){
+  sample_index <- sample(1:nrow(scaled_data), replace=TRUE)
+  boot_data <- scaled_data[sample_index, ]
+  boot_dist_matrix <- dist(boot_data)
+  boot_hc_result <- hclust(boot_dist_matrix, method="average")
+  boot_clusters[[i]] <- cutree(boot_hc_result, k)
+}
+
+# Check the frequency of observations in each cluster across bootstraps
+cluster_freq <- matrix(0, nrow=nrow(scaled_data), ncol=k)
+
+for (i in 1:n_iterations){
+  for (j in 1:nrow(scaled_data)){
+    cluster_freq[j, boot_clusters[[i]][j]] <- cluster_freq[j, boot_clusters[[i]][j]] + 1
+  }
+}
+
+# Descriptive statistics of clusters
+cluster_stats <- aggregate(. ~ cluster, clustered_data, mean)
+print(cluster_stats)
+
+# Boxplot for each variable per cluster
+boxplot(scaled_data ~ clusters, main="Cluster Boxplots", xlab="Cluster", ylab="Scaled Value")#(OpenAI, 2023)
+```
+
+
+## Kmeans clustering:
+
+Data Preprocessing:
+Remove categorical variables
+```{r}
+numeric_data <- youtube_data[sapply(youtube_data, is.numeric)]#(OpenAI, 2023)
+```
+
+Standardize/Normalize data
+```{r}
+scaled_data <- scale(numeric_data)
+```
+
+```{r}
+numeric_data
+```
+
+
+Choosing Number of Clusters:
+Using the elbow method to choose the value of k
+```{r}
+wss <- (nrow(scaled_data) - 1) * sum(apply(scaled_data, 2, var))
+for (i in 2:10) {
+  kmeans_model <- kmeans(scaled_data, centers=i)#(OpenAI, 2023)
+  wss[i] <- kmeans_model$tot.withinss
+}
+```
+
+Plotting the elbow curve
+```{r}
+plot(1:10, wss, type="b", xlab="Number of Clusters", ylab="Within groups sum of squares")#(OpenAI, 2023)
+```
+
+Based on the elbow curve, choose an appropriate k value.
+Executing k-means Clustering:
+```{r}
+set.seed(123)  
+k_value <- 3  
+kmeans_result <- kmeans(scaled_data, centers=k_value)#(OpenAI, 2023)
+```
+
+View clustering results
+Here we can use Principal Component Analysis (PCA) to reduce dimensionality and then visualize the first two principal components
+```{r}
+clusters <- kmeans_result$cluster#(OpenAI, 2023)
+```
+
+
+Visualizing Clustering Results:
+Here we can use Principal Component Analysis (PCA) to reduce dimensionality and then visualize the first two principal components
+```{r}
+pca_result <- prcomp(scaled_data)
+pca_data <- data.frame(pca_result$x[, 1:2])
+pca_data$cluster <- factor(clusters)
+
+ggplot(pca_data, aes(x=PC1, y=PC2, color=cluster)) + geom_point()#(OpenAI, 2023)
+```
+
+## Evaluating Clustering Results:
+
+```{r}
+silhouette_score <- silhouette(clusters, dist(scaled_data))
+mean(silhouette_score[, 3])#(OpenAI, 2023)
+```
+
+The provided plot shows three distinct clusters using PCA. Cluster 1 is separated well cluster 2 has some outliers and cluster 3 is distinct. The silhouette score of 0.3647705 suggests moderate clustering quality; the clusters are distinguishable but there's potential for improvement.
+
+## Conclusion:
+
+>* Combination 1 model in light of the comprehensive analysis provided on predicting the earning potential of emerging You Tubers the following conclusions are drawn:
+
+>* Feature Importance: GDP_2022_in_US_Dollars, lowest_yearly_earnings, and average_earnings emerged as the most significant indicators of a You Tuber's earning potential. It is emphasized that geographical location as depicted by longitude and the economic backdrop of the creator's country play critical roles in forecasting earning levels.
+
+>* Model Performance: The SVM model generally showcased superior predictive capabilities in various aspects of YouTube analysis such as geographical location GDP and average earnings. However, it lacked precision in predicting engagement rates and the influence of video creation time on earnings.
+
+>* Engagement Rate's Importance: Engagement is a pivotal metric for You Tubers and the current models demonstrate a need for refinement in predicting its correlation with earning levels accurately.
+
+>* Integrating Diverse Models: While the SVM model has its merits a multifaceted approach that integrates both Decision Tree and Naive Bayes models offers a more holistic view of YouTube earnings. The Decision Tree provides clear insights into the most influential features whereas Naive Bayes lends a probabilistic perspective to the predictions. This combination ensures both depth and breadth in understanding You Tuber earning level.
+
+>* Model Accuracies: The Decision Tree model demonstrated exceptional accuracy at 99.41% making it a reliable choice. However the Naive Bayes model with 88.17% accuracy still offers valuable insights especially when combined with other models.
+
+>* Business Implications: From a business standpoint the perfect model selection is contingent on strategic goals. While accuracy ensures reliable predictions sensitivity and precision dictate how effectively a business can target high earners and allocate resources efficiently. Companies must consider these trade-offs meticulously to maximize the benefits of their marketing campaigns on YouTube.
+
+>* In conclusion to harness the growth potential of emerging You Tubers effectively businesses should employ a nuanced multi-model approach. Leveraging the strengths of Decision Trees and Naive Bayes models can aid advertisers in making informed decisions optimizing their marketing strategies and ensuring high ROI.
+
+>* For Approach 2 the objective is to identify key drivers behind the earnings of well-established You Tubers focusing on metrics such as subscribers, views, and content categories, with a particular interest in entertainment. The data columns utilized for this analysis, taken from the 'youtube_data' dataset, encompass "subscribers", "video_views", "category", "uploads", "Country", "created_year", "created_month", and 'Earning_level'. It's noteworthy that channels labeled "High" under 'Earning_level' are the leading earners.
+
+>* In understanding YouTube's monetization it's clear that the platform's primary revenue source is advertising on high-viewership channels. Videos with extensive views attract a wider audience translating to more earnings. Channels boasting a vast subscriber count benefit from a stable viewership. Uploading content consistently is pivotal for maintaining channel visibility. The resonance of content is often geographically dependent given the cultural variances in content consumption. Among all 'Entertainment' is the standout category on YouTube. Additionally evaluating when content is uploaded can provide insights into user engagement trends.
+
+>* The Decision tree model demonstrates a high level of precision (92.13%) indicating it's reliable in its positive predictions with few false positives. Its recall of 87% shows it captures most positive instances but there's room for improvement. The accuracy suggests an overall correct prediction rate of 87.40% across classes. The F1 score close to 0.9 indicates a well-balanced trade-off between precision and recall especially important if there's class imbalance. 
+
+>* In terms of the Naive Bayes model's efficacy it exhibits a 93.75% precision underscoring its trustworthiness in predicting leading earners. It successfully identifies roughly 77.42% of top earners though there's potential for missing out on some. With an accuracy of 80.28%, the model predominantly renders accurate outcomes, and its F1 score of 0.85 suggests a harmonious balance between precision and recall.
+
+>* From a strategic standpoint while the Naive Bayes model is ideally suited for scenarios where precision is paramount especially in targeting ad placements on lucrative channels it might not encompass all potential top earners. In such cases refining the model or possibly integrating alternative models like Decision Trees might be worth considering to bolster recall.
+
+>* Hierarchical clustering was executed in a structured manner starting from preprocessing the data by isolating numeric columns and standardizing them.Utilizing the "average" linkage method, the dendrogram visual indicated three distinctive clusters with notable height variations signifying evident separations between clusters.
+The silhouette score a metric indicating cluster quality was 0.7758859 for hierarchical clustering. This score being near to 1 proposes that the clusters are well-separated suggesting an effective clustering structure.
+Further evaluation such as bootstrapping was conducted to verify the stability of the clusters.
+
+>* In Kmeans Clustering Similar preprocessing steps were employed to prepare the data.The optimal number of clusters (k) was determined using the elbow method. Based on the resulting curve k=3 was chosen as the most appropriate value. Applying k-means clustering three clusters were identified. Visualization via PCA indicated that Cluster 1 was distinctly separated Cluster 2 exhibited some outliers and Cluster 3 was noticeably separate. The silhouette score for Kmeans clustering was 0.3647705. This score although moderate implies that the clusters are discernible but hints at potential avenues to optimize the clustering further.
+
+>* Overall both clustering techniques offer unique insights into the data. Hierarchical clustering seems to deliver a more pronounced clustering structure based on the silhouette scores. However Kmeans provides a more flexible and iterative method which might be optimized further. In choosing the most suitable clustering method the specific objectives and computational resources available should be considered.
+
+
+# References:
+1) OpenAI. (2023). Conversations with ChatGPT. Retrieved October 22, 2023, from https://chat.openai.com/
+2) Global YouTube Statistics 2023. (n.d.). Www.kaggle.com. https://www.kaggle.com/datasets/nelgiriyewithana/global-youtube-statistics-2023
